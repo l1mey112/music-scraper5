@@ -17,3 +17,10 @@ export const $artist = sqliteTable('artist', {
 export const $artist_track = sqliteTable('artist_track', {
     id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
 })
+
+// persistent store
+// WITHOUT-ROWID: kv_store
+export const $kv_store = sqliteTable('kv_store', {
+	kind: text('kind').primaryKey(),
+	data: text('data', { mode: 'json' }).notNull(),
+})

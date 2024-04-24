@@ -1,9 +1,9 @@
 import { MaybePromise, PassIdentifier } from "./types"
 import { passes } from "./passes"
 
-class StopPass extends Error {
-	constructor() {
-		super('StopPass')
+class PassStopException extends Error {
+	constructor(message: string) {
+		super(message)
 	}
 }
 
@@ -179,13 +179,16 @@ async function state_machine(): Promise<PassError | undefined> {
 				}
 			} catch (e) {
 				pass_state.state = PassStateEnum.Stopped
-				if (e instanceof StopPass) {
-					break
+				let message = `exception thrown`
+				let throwable = e
+				if (e instanceof PassStopException) {
+					message = `exception thrown: ${e.message}`
+					throwable = undefined
 				}
 				return {
 					pass: pass.name,
-					message: `exception thrown`,
-					throwable: e
+					message,
+					throwable,
 				}
 			}
 
@@ -236,8 +239,9 @@ export async function pass(mutation: PassMutationFn) {
 	inside_pass_job = false
 }
 
-export function pass_force_stop(): never {
-	throw new StopPass()
+// must be called inside a pass, throws an exception
+export function pass_exception(message: string): never {
+	throw new PassStopException(message)
 }
 
 export function pass_state_tostring(v: PassStateEnum) {
