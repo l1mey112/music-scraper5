@@ -6,7 +6,7 @@ import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 export const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: true })
 
-// https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
+sqlite.exec("pragma locking_mode = EXCLUSIVE;") // exclusive locking
 sqlite.exec("pragma journal_mode = WAL;")
 sqlite.exec("pragma synchronous = normal;") // safe with WAL
 sqlite.exec("pragma temp_store = memory;")
