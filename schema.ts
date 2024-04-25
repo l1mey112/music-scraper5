@@ -1,27 +1,27 @@
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { Ident, Link, Locale, LocaleDesc } from "./types";
+import { AlbumId, ArtistId, Ident, Link, Locale, LocaleDesc, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
-    id: integer('id').primaryKey(),
+    id: integer('id').$type<TrackId>().primaryKey(),
 
     isrc: text('isrc'),
 })
 
 export const $album = sqliteTable('album', {
-    id: integer('id').primaryKey(),
+    id: integer('id').$type<AlbumId>().primaryKey(),
 })
 
 export const $artist = sqliteTable('artist', {
-    id: integer('id').primaryKey(),
+    id: integer('id').$type<ArtistId>().primaryKey(),
 })
 
 // search where track_id = ?, order by id asc
-// unfortunately, can't find a way to perform order by rowid optimisations
+// unfortunately, can't find a way to perform order by rowid optimisations, the id needs to be placed inside the index
 // - SEARCH artist_track USING COVERING INDEX artist_track.idx0 (track_id=?)
 export const $artist_track = sqliteTable('artist_track', {
     id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
-	track_id: integer('track_id').notNull(),
-	artist_id: integer('artist_id').notNull(),
+	track_id: integer('track_id').$type<TrackId>().notNull(),
+	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
 
 	// role, etc
 }, (t) => ({
@@ -73,3 +73,7 @@ export const $locale = sqliteTable('locale', {
 }, (t) => ({
 	idx0: index('locale.idx0').on(t.ident),
 }))
+
+export const $queue = sqliteTable('queue', {
+	
+})
