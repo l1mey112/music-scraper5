@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db";
 import { locale_from_bcp_47 } from "../locale";
-import { ident_unwrap, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_pop_fill, queue_retry_later, run_batched_zip } from "../pass_misc";
+import { ident_cmd_unwrap, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_pop, queue_retry_later, run_batched_zip } from "../pass_misc";
 import { $youtube_video } from "../schema";
 import { Locale, LocaleDesc, LocaleEntry, QueueCmd, QueueEntry } from "../types";
 import { YoutubeImage, meta_youtube_video_v3 } from "./youtube_api";
@@ -20,7 +20,7 @@ function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
 
 export async function pass_youtube_video_meta_youtube_video() {
 	let updated = false
-	const k = queue_pop_fill<string>(QueueCmd.yt_video, 'track_id')
+	const k = queue_pop<string>(QueueCmd.yt_video, 'track_id')
 
 	function batch_fn(entry: QueueEntry<string>[]) {
 		return meta_youtube_video_v3(entry.map(it => it.payload))
@@ -38,9 +38,7 @@ export async function pass_youtube_video_meta_youtube_video() {
 			let has_loc_description = false
 
 			const youtube_id = entry.payload
-			
-			const ident = entry.target
-			const track_id = ident_unwrap(entry, 'track_id')
+			const [ident, track_id] = ident_cmd_unwrap(entry, 'track_id')
 
 			const locales: LocaleEntry[] = []
 

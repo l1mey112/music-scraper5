@@ -16,37 +16,13 @@ const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload:
 	order by expiry asc nulls first
 `)
 
-// will fill in idents if they are null
-export function queue_pop_fill<T = unknown>(cmd: QueueCmd, kind: 'track_id' | 'album_id' | 'artist_id'): QueueEntry<T>[] {
+export function queue_pop<T = unknown>(cmd: QueueCmd, kind: 'track_id' | 'album_id' | 'artist_id'): QueueEntry<T>[] {
 	const entries = stmt_search.all(Date.now(), cmd)
 
 	const nentries = entries.map(it => {
-		if (it.target === '') {
-			console.log('filling target', it.rowid, it.target, it.payload, kind)
-			it.target = ident_pk_bare(snowflake(), kind)
-		}
-
 		return {
 			...it,
-			target: it.target,
-			payload: JSON.parse(it.payload) as T,
-			cmd,
-		}
-	})
-
-	return nentries
-}
-
-// malformed to call this function with a non-null target
-export function queue_pop<T = unknown>(cmd: QueueCmd): QueueEntry<T>[] {
-	const entries = stmt_search.all(Date.now(), cmd)
-
-	const nentries = entries.map(it => {
-		assert(it.target)
-
-		return {
-			...it,
-			target: it.target,
+			target: it.target === '' ? undefined : it.target,
 			payload: JSON.parse(it.payload) as T,
 			cmd,
 		}
@@ -80,43 +56,8 @@ export function queue_complete(entry: QueueEntry) {
 		.run()
 }
 
-function queue_identify_exiting_target(cmd: QueueCmd, payload: any): Ident | undefined {
-	let target: Ident | undefined
-	
-	type KindColumn = 'track_id' | 'album_id' | 'artist_id'
-	const map: Record<QueueCmd, [SQLiteTable, KindColumn] | null> = {
-		[QueueCmd.yt_video]: [$youtube_video, 'track_id'],
-		[QueueCmd.sp_track]: [$spotify_track, 'track_id'],
-		[QueueCmd.image_url]: null,
-	}
-
-	const fk_table = map[cmd]
-	assert(fk_table !== undefined)
-
-	// check if target id exists already and assign the target if it does
-	if (fk_table) {
-		const [table, col] = fk_table
-
-		assert(typeof payload === 'string')
-
-		const sel = db.select({ target: sql<Snowflake>`${sql.identifier(col)}` })
-			.from(table)
-			.where(sql`id = ${payload}`)
-			.get()
-
-		if (sel) {
-			target = ident_pk_bare(sel.target, col)
-			console.log('found existing target', target, sel.target, col, cmd)
-		}
-	}
-
-	return target
-}
-
 // dispatch a command to be executed immediately
 export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
-	target ??= queue_identify_exiting_target(cmd, payload)
-
 	db.insert($queue)
 		.values({ cmd, target, payload })
 		.onConflictDoUpdate({
@@ -207,41 +148,67 @@ type KindTo = {
 
 // ensures existence of the id in the table as well
 // will create in table if doesn't exist
-export function ident_unwrap<T extends 'track_id' | 'album_id' | 'artist_id'>(entry: QueueEntry, kind: T): KindTo[T] {
-	let pk_table: SQLiteTable
+export function ident_cmd_unwrap<T extends keyof KindTo>(entry: QueueEntry, kind: T): [Ident, KindTo[T]] {
 
-	const id = ident_id<KindTo[T]>(entry.target)
+	// identify target
+	// 1. if the queue entry has a target, use that
+	// 2. if the queue command is for creating a track/album/artist from a third party source,
+	//    identify if that source already exists, then return the id associated with it
+	// 3. nothing found that already exists, just autogenerate and create
 
-	switch (kind) {
-		case 'track_id': {
-			assert(entry.target.startsWith('tr'))
-			pk_table = $track
-			break
-		}
-		case 'album_id': {
-			assert(entry.target.startsWith('al'))
-			pk_table = $album
-			break
-		}
-		case 'artist_id': {
-			assert(entry.target.startsWith('ar'))
-			pk_table = $artist
-			break
-		}
-		default: {
-			assert(false)
+	// 1.
+	if (entry.target) {
+		return [entry.target, ident_id(entry.target)]
+	}
+
+	// 2.
+	const map2: Record<QueueCmd, [SQLiteTable, keyof KindTo] | null> = {
+		[QueueCmd.yt_video]: [$youtube_video, 'track_id'],
+		[QueueCmd.sp_track]: [$spotify_track, 'track_id'],
+		[QueueCmd.image_url]: null,
+	}
+
+	const fk_table = map2[entry.cmd]
+	assert(fk_table !== undefined, 'inexhaustive match')
+
+	if (fk_table) {
+		const [table, col] = fk_table
+
+		// the above types of commands only have a string payload
+		assert(typeof entry.payload === 'string')
+
+		const sel = db.select({ target: sql<Snowflake>`${sql.identifier(col)}` })
+			.from(table)
+			.where(sql`id = ${entry.payload}`)
+			.get()
+
+		if (sel) {
+			return [ident(sel.target, col), sel.target as KindTo[T]]
 		}
 	}
 
-	db.insert(pk_table)
-		.values({ id })
+	// 3.
+	const target_id = snowflake() as KindTo[T]
+
+	const map3: Record<keyof KindTo, SQLiteTable> = {
+		track_id: $track,
+		album_id: $album,
+		artist_id: $artist,
+	}
+
+	// ensure existence
+	// TODO: will need to possibly adjust the API to allow to actually provide
+	//       values for the `track`, `album`, `artist` tables
+	//       will need to also merge those data in on step 2+3, and create it in step 1
+	db.insert(map3[kind])
+		.values({ id: target_id } as any)
 		.onConflictDoNothing()
 		.run()
 
-	return id
+	return [ident(target_id, kind), target_id]
 }
 
-export function ident_pk_bare(target: Snowflake, kind: 'track_id' | 'album_id' | 'artist_id'): Ident {
+export function ident(target: Snowflake, kind: 'track_id' | 'album_id' | 'artist_id'): Ident {
 	let prefix
 
 	switch (kind) {
@@ -260,7 +227,7 @@ export function ident_pk_bare(target: Snowflake, kind: 'track_id' | 'album_id' |
 }
 
 export function ident_id<T extends TrackId | AlbumId | ArtistId>(id: Ident): T {
-	return BigInt(id.slice(2)) as T
+	return Number(id.slice(2)) as T
 }
 
 // inserts [ImageKind, string] into the queue

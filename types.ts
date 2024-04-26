@@ -69,7 +69,7 @@ export const Link = Object.freeze({
 
 export type QueueEntry<T = unknown> = {
 	rowid: number
-	target: Ident // existing or generated
+	target?: Ident | null
 	payload: T
 	cmd: QueueCmd
 }
