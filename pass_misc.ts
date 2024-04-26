@@ -1,23 +1,23 @@
-import { sql } from "drizzle-orm";
-import { db, sqlite } from "./db";
-import { $album, $artist, $external_links, $locale, $queue, $spotify_track, $track, $youtube_video } from "./schema";
-import { snowflake } from "./snowflake";
-import { AlbumId, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, QueueCmd, QueueEntry, Snowflake, TrackId } from "./types";
-import { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm"
+import { db, sqlite } from "./db"
+import { $album, $artist, $external_links, $locale, $queue, $spotify_track, $track, $youtube_video } from "./schema"
+import { snowflake } from "./snowflake"
+import { AlbumId, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackId } from "./types"
+import { SQLiteTable } from "drizzle-orm/sqlite-core"
 
 // > A value with storage class NULL is considered less than any other value
 // https://www.sqlite.org/datatype3.html#sort_order
 
 // QUERY PLAN
 // `--SEARCH queue USING INDEX queue.idx0 (expiry<?)
-const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmd]>(`
+const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmdHashed]>(`
 	select rowid, target, payload from queue
 	where expiry <= ? and cmd = ?
 	order by expiry asc nulls first
 `)
 
-export function queue_pop<T = unknown>(cmd: QueueCmd, kind: 'track_id' | 'album_id' | 'artist_id'): QueueEntry<T>[] {
-	const entries = stmt_search.all(Date.now(), cmd)
+export function queue_pop<T = unknown>(cmd: QueueCmd): QueueEntry<T>[] {
+	const entries = stmt_search.all(Date.now(), queue_hash_cmd(cmd))
 
 	const nentries = entries.map(it => {
 		return {
@@ -56,10 +56,15 @@ export function queue_complete(entry: QueueEntry) {
 		.run()
 }
 
+// just use cityhash32, its good enough
+function queue_hash_cmd(cmd: QueueCmd): QueueCmdHashed {
+	return Bun.hash.cityHash32(cmd) as QueueCmdHashed
+}
+
 // dispatch a command to be executed immediately
 export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
 	db.insert($queue)
-		.values({ cmd, target, payload })
+		.values({ cmd: queue_hash_cmd(cmd), target, payload })
 		.onConflictDoUpdate({
 			target: [$queue.target, $queue.cmd, $queue.payload],
 			set: {
@@ -73,7 +78,7 @@ export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: I
 // dispatch a command to be executed after a certain amount of time
 export function queue_dispatch_later(cmd: QueueCmd, payload: any, target: Ident, expiry_after_millis: number) {	
 	db.insert($queue)
-		.values({ cmd, target, payload, expiry: Date.now() + expiry_after_millis })
+		.values({ cmd: queue_hash_cmd(cmd), target, payload, expiry: Date.now() + expiry_after_millis })
 		.onConflictDoUpdate({
 			target: [$queue.target, $queue.cmd, $queue.payload],
 			set: {
@@ -166,6 +171,7 @@ export function ident_cmd_unwrap<T extends keyof KindTo>(entry: QueueEntry, kind
 		[QueueCmd.yt_video]: [$youtube_video, 'track_id'],
 		[QueueCmd.sp_track]: [$spotify_track, 'track_id'],
 		[QueueCmd.image_url]: null,
+		/* [QueueCmd.yt_channel]: null, */
 	}
 
 	const fk_table = map2[entry.cmd]

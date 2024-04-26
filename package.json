@@ -11,6 +11,7 @@
     "drizzle-orm": "^0.30.6"
   },
   "dependencies": {
+    "@spotify/web-api-ts-sdk": "^1.2.0",
     "bcp-47": "^2.1.0"
   }
 }

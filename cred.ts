@@ -5,7 +5,7 @@ import { pass_exception } from "./pass"
 
 export type CredentialKind = keyof CredentialStore
 type CredentialStore = {
-	'spotify': [string, string][] // [client_id, client_secret]
+	'spotify_api': [string, string][] // [client_id, client_secret]
 	'deezer_arl': [string][]
 	'spotify_dl_user': [string, string][] // [username, password]
 }
@@ -39,7 +39,7 @@ const credential_props: CredentialProp[] = [
 
 function cred_db_get(): CredentialStore {
 	let store: CredentialStore = {
-		'spotify': [],
+		'spotify_api': [],
 		'deezer_arl': [],
 		'spotify_dl_user': [],
 	}
@@ -58,7 +58,7 @@ function cred_db_get(): CredentialStore {
 }
 
 // must be called inside a pass, throws PassStopException if cred not found
-export function cred_get_infallable<T extends CredentialKind>(kind: T): CredentialStore[T] {
+export function pass_cred_get<T extends CredentialKind>(kind: T): CredentialStore[T] {
 	const datum = cred_db_get()[kind]
 
 	if (datum.length === 0) {

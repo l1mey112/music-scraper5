@@ -49,6 +49,10 @@ let sequence = 0
 // |              timestamp  (48 bits)              | seq |
 // +------------------------------------------------+-----+
 
+// keep note that Number.MAX_SAFE_INTEGER == 2^53-1, not 2^53
+// i doubt this matters, we're just chopping the bits anyway
+// sources say that it is 2^53 exactly, so which is it?
+
 export function snowflake(): Snowflake {
 	const now = Date.now()
 

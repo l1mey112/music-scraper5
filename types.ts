@@ -5,6 +5,9 @@ export type NewType<K, T> = T & { readonly __newtype: K }
 export type NullMit<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 export type KV<K extends keyof any, V> = Partial<Record<K, V>>
 
+export type static_assert<T extends true> = never
+export type type_extends<T, U> = T extends U ? true : false
+
 export type Snowflake = number
 
 // cannot have NewType(NewType()) as this results in `never`
@@ -12,8 +15,8 @@ export type TrackId = NewType<'TrackId', Snowflake>
 export type AlbumId = NewType<'AlbumId', Snowflake>
 export type ArtistId = NewType<'ArtistId', Snowflake>
 
-type PassField = 'all' | 'track' | 'album' | 'artist' | 'karent_album' | 'karent_artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images' | 'sources'
-type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag'
+type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'sources'
+type PassKind = 'new' | 'extrapolate' | 'download' | 'classify' | 'tag'
 export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 type IdentComponents = `tr${string}` | `al${string}` | `ar${string}`
@@ -74,11 +77,18 @@ export type QueueEntry<T = unknown> = {
 	cmd: QueueCmd
 }
 
-export enum QueueCmd {
-	yt_video = 0,
-	sp_track = 1,
-	image_url = 2,
-}
+export const queue_cmds = [
+	'track.new.youtube_video',
+	'track.new.spotify_track',
+	'image.new.image_url',
+	'artist.new.youtube_channel',
+] as const
+
+// ensure all queue commands are pass identifiers
+type _ = static_assert<type_extends<typeof queue_cmds, readonly PassIdentifier[]>>
+
+export type QueueCmdHashed = NewType<'QueueCmdHashed', number>
+export type QueueCmd = typeof queue_cmds[number]
 
 export type LinkEntry = {
 	ident: Ident

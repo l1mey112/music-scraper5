@@ -1,5 +1,5 @@
 import { SQLiteBigInt, index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { AlbumId, ArtistId, Ident, Link, Locale, LocaleDesc, QueueCmd, TrackId } from "./types";
+import { AlbumId, ArtistId, Ident, Link, Locale, LocaleDesc, QueueCmd, QueueCmdHashed, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
     id: integer('id').$type<TrackId>().primaryKey(),
@@ -78,7 +78,7 @@ export const $locale = sqliteTable('locale', {
 // FIFO queue, 0 expiry means immediate. use `order by expiry asc`
 export const $queue = sqliteTable('queue', {
 	target: text('target').default('').$type<Ident>().notNull(), // FK decided by `pk_ident`, '' means create a new target
-	cmd: integer('cmd').$type<QueueCmd>().notNull(),
+	cmd: integer('cmd').$type<QueueCmdHashed>().notNull(),
 	payload: text('payload', { mode: "json" }).notNull(), // data decided by the work cmd
 
 	expiry: integer('expiry').default(0).notNull(), // unix millis, zero for immediate
