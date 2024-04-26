@@ -4,14 +4,13 @@ set -e
 
 sh/killschema.sh
 
-# update this as needed
-
-stmts=(
+cmds=(
 	# cosmo@bousou-p
-	"insert into spotify_track (id) values ('1rkDWkKb9J4A37J91U6eUW');"
-	"insert into youtube_video (id) values ('XwCv6Gm3Q3Q');"
+	"sp_track" "1rkDWkKb9J4A37J91U6eUW"
+	"yt_video" "XwCv6Gm3Q3Q"
+
+	# faker
+	"yt_video" "among_fake"
 )
 
-for stmt in "${stmts[@]}"; do
-	echo "$stmt" | sqlite3 db.sqlite
-done
+sh/queue_imm.ts "${cmds[@]}"

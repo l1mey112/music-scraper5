@@ -1,5 +1,5 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { AlbumId, ArtistId, Ident, Link, Locale, LocaleDesc, TrackId } from "./types";
+import { SQLiteBigInt, index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { AlbumId, ArtistId, Ident, Link, Locale, LocaleDesc, QueueCmd, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
     id: integer('id').$type<TrackId>().primaryKey(),
@@ -38,7 +38,7 @@ export const $kv_store = sqliteTable('kv_store', {
 // WITHOUT-ROWID: youtube_video
 export const $youtube_video = sqliteTable('youtube_video', {
 	id: text('id').primaryKey(),
-	track_id: integer('track_id').notNull(),
+	track_id: integer('track_id').$type<TrackId>().notNull(),
 
 	channel_id: text('channel_id').notNull(),
 })
@@ -46,7 +46,7 @@ export const $youtube_video = sqliteTable('youtube_video', {
 // WITHOUT-ROWID: spotify_track
 export const $spotify_track = sqliteTable('spotify_track', {
 	id: text('id').primaryKey(),
-	track_id: integer('track_id').notNull(),
+	track_id: integer('track_id').$type<TrackId>().notNull(),
 })
 
 // rowid + composite unique index has a better query plans than without-rowid + composite primary key.
@@ -72,8 +72,18 @@ export const $locale = sqliteTable('locale', {
 	text: text('text').notNull(),
 }, (t) => ({
 	idx0: index('locale.idx0').on(t.ident),
+	uniq: unique('locale.uniq').on(t.locale, t.desc, t.text),
 }))
 
+// FIFO queue, 0 expiry means immediate. use `order by expiry asc`
 export const $queue = sqliteTable('queue', {
-	
-})
+	target: text('target').default('').$type<Ident>().notNull(), // FK decided by `pk_ident`, '' means create a new target
+	cmd: integer('cmd').$type<QueueCmd>().notNull(),
+	payload: text('payload', { mode: "json" }).notNull(), // data decided by the work cmd
+
+	expiry: integer('expiry').default(0).notNull(), // unix millis, zero for immediate
+	retry_count: integer('retry_count').default(0).notNull(), // amount of retries thus far
+}, (t) => ({
+	idx0: index('queue.idx0').on(t.expiry, t.cmd),
+	uniq: unique('queue.uniq').on(t.target, t.cmd, t.payload), // unique for removing duplicates
+}))

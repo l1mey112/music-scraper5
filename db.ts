@@ -2,11 +2,10 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import { Database } from 'bun:sqlite'
 import * as schema from './schema'
-import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 export const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: true })
 
-sqlite.exec("pragma locking_mode = EXCLUSIVE;") // exclusive locking
+//sqlite.exec("pragma locking_mode = EXCLUSIVE;") // exclusive locking
 sqlite.exec("pragma journal_mode = WAL;")
 sqlite.exec("pragma synchronous = normal;") // safe with WAL
 sqlite.exec("pragma temp_store = memory;")
