@@ -1,5 +1,5 @@
 import { SQLiteBigInt, index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { AlbumId, ArtistId, Ident, Link, Locale, LocaleDesc, QueueCmd, QueueCmdHashed, TrackId } from "./types";
+import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, QueueCmd, QueueCmdHashed, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
     id: integer('id').$type<TrackId>().primaryKey(),
@@ -86,4 +86,15 @@ export const $queue = sqliteTable('queue', {
 }, (t) => ({
 	idx0: index('queue.idx0').on(t.expiry, t.cmd),
 	uniq: unique('queue.uniq').on(t.target, t.cmd, t.payload), // unique for removing duplicates
+}))
+
+// WITHOUT-ROWID: images
+export const $images = sqliteTable('images', {
+	hash: text('hash').$type<FSRef>().primaryKey(),
+	ident: text('ident').$type<Ident>().notNull(),
+	kind: text('kind').$type<ImageKind>().notNull(),
+	width: integer('width').notNull(),
+	height: integer('height').notNull(),
+}, (t) => ({
+	pkidx: index("images.ident_idx").on(t.ident, t.hash),
 }))

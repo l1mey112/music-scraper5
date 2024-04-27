@@ -10,10 +10,13 @@ export type type_extends<T, U> = T extends U ? true : false
 
 export type Snowflake = number
 
-// cannot have NewType(NewType()) as this results in `never`
+// cannot have NewType<NewType<T>> as this results in `never`
 export type TrackId = NewType<'TrackId', Snowflake>
 export type AlbumId = NewType<'AlbumId', Snowflake>
 export type ArtistId = NewType<'ArtistId', Snowflake>
+
+// an FSRef is a <snowlake>.<ext> string
+export type FSRef = NewType<'FSRef', string>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'sources'
 type PassKind = 'new' | 'extrapolate' | 'download' | 'classify' | 'tag'
