@@ -3,7 +3,7 @@ import { db } from "../db";
 import { locale_from_bcp_47 } from "../locale";
 import { ident_cmd_unwrap, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, run_batched_zip } from "../pass_misc";
 import { $youtube_video } from "../schema";
-import { Locale, LocaleDesc, LocaleEntry, QueueCmd, QueueEntry } from "../types";
+import { Locale, LocaleDesc, LocaleEntry, QueueEntry } from "../types";
 import { YoutubeImage, meta_youtube_video_v3 } from "./youtube_api";
 
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {

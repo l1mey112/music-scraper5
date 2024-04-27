@@ -1,3 +1,5 @@
+import { nfetch } from "../fetch"
+
 const YT_LEMNOS_URL = 'https://yt.lemnoslife.com'
 
 // no batch operation, that is annoying
@@ -7,11 +9,7 @@ export async function meta_youtube_handle_to_id(handle: string): Promise<string 
 		throw new Error(`youtube handle must start with @ (id: ${handle})`)
 	}
 
-	const resp = await fetch(`${YT_LEMNOS_URL}/noKey/channels&forHandle=${handle}&part=snippet`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-		}
-	})
+	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/channels&forHandle=${handle}&part=snippet`)
 
 	const json: any = await resp.json()
 	if (json.pageInfo.totalResults === 0) {
@@ -28,11 +26,7 @@ export async function meta_youtube_video_v3(video_ids: string[]): Promise<(Youtu
 		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${video_ids.join(',')})`)
 	}
 
-	const resp = await fetch(`${YT_LEMNOS_URL}/noKey/videos?id=${video_ids.join(',')}&part=snippet,localizations`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-		}
-	})
+	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/videos?id=${video_ids.join(',')}&part=snippet,localizations`)
 
 	if (!resp.ok) {
 		console.error(await resp.text())
@@ -87,11 +81,7 @@ export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promi
 		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${channel_ids.join(',')})`)
 	}
 
-	const resp = await fetch(`${YT_LEMNOS_URL}/channels?id=${channel_ids.join(',')}&part=snippet,about`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-		}
-	})
+	const resp = await nfetch(`${YT_LEMNOS_URL}/channels?id=${channel_ids.join(',')}&part=snippet,about`)
 
 	if (!resp.ok) {
 		console.error(await resp.text())
@@ -137,11 +127,7 @@ export async function meta_youtube_channel_v3(channel_ids: string[]): Promise<(s
 		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${channel_ids.join(',')})`)
 	}
 
-	const resp = await fetch(`${YT_LEMNOS_URL}/noKey/channels?part=snippet&id=${channel_ids.join(',')}`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-		}
-	})
+	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/channels?part=snippet&id=${channel_ids.join(',')}`)
 
 	if (!resp.ok) {
 		console.error(await resp.text())

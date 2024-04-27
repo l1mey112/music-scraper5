@@ -80,7 +80,7 @@ export type QueueEntry<T = unknown> = {
 export const queue_cmds = [
 	'track.new.youtube_video',
 	'track.new.spotify_track',
-	'image.new.image_url',
+	'image.download.image_url',
 	'artist.new.youtube_channel',
 ] as const
 

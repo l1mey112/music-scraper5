@@ -1,4 +1,3 @@
-import { assert } from "./pass_misc"
 import { Snowflake } from "./types"
 
 const epoch = 0 /* +Date.UTC(1970, 0, 1) */

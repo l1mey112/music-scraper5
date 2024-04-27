@@ -151,6 +151,11 @@ type KindTo = {
 	artist_id: ArtistId
 }
 
+export function ident_cmd(entry: QueueEntry): Ident {
+	assert(entry.target)
+	return entry.target
+}
+
 // ensures existence of the id in the table as well
 // will create in table if doesn't exist
 export function ident_cmd_unwrap<T extends keyof KindTo>(entry: QueueEntry, kind: T): [Ident, KindTo[T]] {
@@ -168,9 +173,9 @@ export function ident_cmd_unwrap<T extends keyof KindTo>(entry: QueueEntry, kind
 
 	// 2.
 	const map2: Record<QueueCmd, [SQLiteTable, keyof KindTo] | null> = {
-		[QueueCmd.yt_video]: [$youtube_video, 'track_id'],
-		[QueueCmd.sp_track]: [$spotify_track, 'track_id'],
-		[QueueCmd.image_url]: null,
+		'track.new.youtube_video': [$youtube_video, 'track_id'],
+		'track.new.spotify_track': [$spotify_track, 'track_id'],
+		'image.download.image_url': null,
 		/* [QueueCmd.yt_channel]: null, */
 	}
 
@@ -239,7 +244,7 @@ export function ident_id<T extends TrackId | AlbumId | ArtistId>(id: Ident): T {
 // inserts [ImageKind, string] into the queue
 // it is in an array/tuple for deterministic JSON.stringify etc
 export function images_queue_url(ident: Ident, kind: ImageKind, url: string) {
-	queue_dispatch_immediate(QueueCmd.image_url, [kind, url], ident)
+	queue_dispatch_immediate('image.download.image_url', [kind, url], ident)
 }
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
@@ -296,6 +301,30 @@ export async function run_batched_zip<T, O>(arr: T[], batch_size: number, batch_
 			await next(batch[i], results[i])
 		}
 	}
+}
+
+export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, next: (v: T) => Promise<void>) {
+	const active_promises: Promise<void>[] = []
+
+	for (const item of arr) {
+		// wait until there's room for a new operation
+		while (active_promises.length >= concurrency_limit) {
+			await Promise.race(active_promises)
+		}
+
+		const next_operation = next(item)
+		active_promises.push(next_operation)
+
+		next_operation.finally(() => {
+			const index = active_promises.indexOf(next_operation)
+			if (index !== -1) {
+				active_promises.splice(index, 1)
+			}
+		})
+	}
+
+	// wait for all active operations to complete
+	await Promise.all(active_promises)
 }
 
 export function assert(condition: any, message?: string): asserts condition {
