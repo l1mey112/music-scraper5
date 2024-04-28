@@ -1,4 +1,5 @@
 import { PassElement } from "./pass"
+import { pass_source_classify_chromaprint } from "./passes/chromaprint"
 import { pass_image_download_image_url } from "./passes/image"
 import { pass_link_classify_link_shorteners, pass_link_classify_weak } from "./passes/link"
 import { pass_link_extrapolate_from_linkcore, pass_link_extrapolate_from_lnk_to } from "./passes/link_distributors"
@@ -29,4 +30,5 @@ export const passes: PassElement[] = [
 	{ name: 'image.download.image_url', fn: pass_image_download_image_url },
 	{ name: 'source.download.from_youtube_video', fn: pass_source_download_from_youtube_video },
 	{ name: 'source.download.from_spotify_track', fn: pass_source_download_from_spotify_track },
+	{ name: 'source.classify.chromaprint', fn: pass_source_classify_chromaprint },
 ]

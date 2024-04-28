@@ -1,7 +1,7 @@
 import { $ } from "bun"
 import { pass_zotify_credentials } from "../cred"
 import { fs_media_path, fs_sharded_path_noext_nonlazy } from "../fs"
-import { ident_cmd_unwrap_new, queue_complete, queue_pop, queue_retry_later, run_with_concurrency_limit } from "../pass_misc"
+import { ident_cmd_unwrap_new, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, run_with_concurrency_limit } from "../pass_misc"
 import { dirname, basename } from 'path'
 import { FSRef } from "../types"
 import { $source, $spotify_track } from "../schema"
@@ -72,6 +72,7 @@ export async function pass_source_download_from_spotify_track() {
 				.where(sql`id = ${spotify_id}`)
 				.run()
 				
+			queue_dispatch_immediate('source.classify.chromaprint', hash, ident) // ident is ignored
 			queue_complete(entry)
 		})
 		updated = true
