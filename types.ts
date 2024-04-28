@@ -24,24 +24,23 @@ export type ArtistEntry = typeof $artist.$inferInsert
 // an FSRef is a <snowlake>.<ext> string
 export type FSRef = NewType<'FSRef', string>
 
-type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'sources'
+type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'source'
 type PassKind = 'new' | 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag'
 export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 type IdentComponents = `tr${string}` | `al${string}` | `ar${string}`
 export type Ident = NewType<'Ident', IdentComponents>
 
-const image_kind_tostring = {
-	yt_thumbnail: 'YouTube Thumbnail',
-	yt_banner: 'YouTube Banner',
-	yt_tv_banner: 'YouTube TV Banner',
-	yt_mobile_banner: 'YouTube Mobile Banner',
-	sp_banner: 'Spotify Artist Banner',
-	cover_art: 'Cover Art',
-	profile_art: 'Profile Art',
-} as const
-
-export type ImageKind = keyof typeof image_kind_tostring
+export type ImageKind = typeof ImageKind[keyof typeof ImageKind]
+export const ImageKind = Object.freeze({
+	['YouTube Thumbnail']: 0,
+	['YouTube Banner']: 1,
+	['YouTube TV Banner']: 2,
+	['YouTube Mobile Banner']: 3,
+	['Spotify Artist Banner']: 4,
+	['Cover Art']: 5,
+	['Profile Art']: 6,
+})
 
 // see locale.ts
 // Locale is a IETF language subtag (e.g. en, jp)
@@ -57,7 +56,7 @@ export enum LocaleDesc {
 
 // afaik, sqlite doesn't support string interning
 // this will save so much memory
-export type Link = number
+export type Link = typeof Link[keyof typeof Link]
 export const Link = Object.freeze({
 	['Unknown URL']: 0, // integers 0 and 1 have zero overhead storage size in sqlite
 	['YouTube Video']: 1,

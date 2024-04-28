@@ -138,7 +138,7 @@ export function queue_dispatch_chain_returning(cmd: QueueCmd, payload: any): Ide
 	return target
 }
 
-function verify_target(pass: PassIdentifier) {
+function verify_new_target(pass: PassIdentifier) {
 	const comp = pass.split('.')
 
 	assert(comp[1] === 'new', `pass must be a new pass (${pass})`)
@@ -148,7 +148,7 @@ function verify_target(pass: PassIdentifier) {
 // work entries dispatched by other entries should use this function to avoid infinite loops
 export function queue_dispatch_chain_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
 	if (!target) {
-		verify_target(cmd)
+		verify_new_target(cmd)
 	}
 
 	if (queue_identify_exiting_target(cmd, payload)) {
@@ -170,7 +170,7 @@ export function queue_dispatch_chain_immediate(cmd: QueueCmd, payload: any, targ
 // dispatch a command to be executed immediately
 export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
 	if (!target) {
-		verify_target(cmd)
+		verify_new_target(cmd)
 	}
 
 	target ??= queue_identify_exiting_target(cmd, payload)
@@ -325,6 +325,7 @@ export function ident_cmd_unwrap_new<T extends ArticleKind>(entry: QueueEntry, k
 	let target = entry.target
 
 	if (!target) {
+		verify_new_target(entry.cmd)
 		target = ident(snowflake(), kind)
 	}
 

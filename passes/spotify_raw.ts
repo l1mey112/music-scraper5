@@ -4,7 +4,7 @@
 import { db } from "../db"
 import { nfetch } from "../fetch"
 import { ident_cmd_unwrap_new, images_queue_url, link_insert, link_urls_unknown, links_from_text, locale_insert, queue_complete, queue_pop, run_with_concurrency_limit } from "../pass_misc"
-import { Link, LinkEntry, LocaleDesc, LocaleEntry } from "../types"
+import { ImageKind, Link, LinkEntry, LocaleDesc, LocaleEntry } from "../types"
 
 export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArtistInitialData | undefined> {	
 	const url = `https://open.spotify.com/artist/${spotify_id}`
@@ -42,7 +42,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 	let updated = false
 	const k = queue_pop<string>('artist.meta.spotify_artist_supplementary')
 
-	run_with_concurrency_limit(k, 4, async (entry) => {
+	await run_with_concurrency_limit(k, 4, async (entry) => {
 		const spotify_id = entry.payload
 		const data = await spotify_raw_artist(spotify_id)
 		if (!data) {
@@ -50,7 +50,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 		}
 
 		db.transaction(db => {
-			const [ident, artist_id] = ident_cmd_unwrap_new(entry, 'artist_id')
+			const [ident, _] = ident_cmd_unwrap_new(entry, 'artist_id')
 
 			const links: LinkEntry[] = link_urls_unknown(ident, data.external_links)
 
@@ -72,7 +72,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 			const largest: SpotifyImage | undefined = data.header_images.reduce((a, b) => a.width * a.height > b.width * b.height ? a : b)
 
 			if (largest) {
-				images_queue_url(ident, 'sp_banner', largest.url)
+				images_queue_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
 			}
 
 			queue_complete(entry)

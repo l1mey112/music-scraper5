@@ -5,6 +5,7 @@ import { pass_link_extrapolate_from_linkcore, pass_link_extrapolate_from_lnk_to 
 import { pass_album_new_spotify_album, pass_artist_new_spotify_artist, pass_track_new_spotify_track } from "./passes/spotify"
 import { pass_artist_meta_spotify_supplementary } from "./passes/spotify_raw"
 import { pass_track_new_youtube_video } from "./passes/youtube"
+import { pass_source_download_from_youtube_video } from "./passes/youtube_download"
 
 export const passes: PassElement[] = [
 	[
@@ -25,4 +26,5 @@ export const passes: PassElement[] = [
 		],
 	],
 	{ name: 'image.download.image_url', fn: pass_image_download_image_url },
+	{ name: 'source.download.from_youtube_video', fn: pass_source_download_from_youtube_video },
 ]

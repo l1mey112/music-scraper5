@@ -3,7 +3,7 @@ import { db } from "../db";
 import { locale_from_bcp_47 } from "../locale";
 import { ident_cmd_unwrap_new, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, insert_canonical, run_batched_zip, insert_track_artist, ident_id, queue_dispatch_chain_returning } from "../pass_misc";
 import { $youtube_video } from "../schema";
-import { ArtistId, Locale, LocaleDesc, LocaleEntry, QueueEntry } from "../types";
+import { ArtistId, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry } from "../types";
 import { YoutubeImage, meta_youtube_video_v3 } from "./youtube_api";
 
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
@@ -96,7 +96,7 @@ export async function pass_track_new_youtube_video() {
 						preferred: false,
 					})
 				}
-				
+
 				if (!has_loc_description) {
 					locales.push({
 						ident,
@@ -116,7 +116,7 @@ export async function pass_track_new_youtube_video() {
 			const links = links_from_text(ident, video.description)
 
 			if (thumb) {
-				images_queue_url(ident, 'yt_thumbnail', thumb.url)
+				images_queue_url(ident, ImageKind["YouTube Thumbnail"], thumb.url)
 			}
 
 			insert_canonical($youtube_video, video.id, youtube_id, {
@@ -129,10 +129,11 @@ export async function pass_track_new_youtube_video() {
 
 			locale_insert(locales)
 			link_insert(links)
+			queue_dispatch_immediate('source.download.from_youtube_video', youtube_id, ident)
 
-			updated = true
 			queue_complete(entry)
 		})
+		updated = true
 	})
 
 	return updated

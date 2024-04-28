@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, real, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, QueueCmdHashed, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
@@ -64,6 +64,7 @@ export const $youtube_video = sqliteTable('youtube_video', {
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 
 	channel_id: text('channel_id').notNull(),
+	video_source: text('video_source').$type<FSRef>(), // downloaded video source
 })
 
 // WITHOUT-ROWID: youtube_channel
@@ -136,9 +137,36 @@ export const $queue = sqliteTable('queue', {
 export const $images = sqliteTable('images', {
 	hash: text('hash').$type<FSRef>().primaryKey(),
 	ident: text('ident').$type<Ident>().notNull(),
-	kind: text('kind').$type<ImageKind>().notNull(),
+	kind: integer('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
 }, (t) => ({
 	pkidx: index("images.ident_idx").on(t.ident, t.hash),
+}))
+
+// chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less
+// this doesn't represent the entire length of the audio
+// one second is ~7.8 uint32s
+
+// compression of a chromaprint is a BAD idea, the entropy is already way too high
+// i tried, you'll save 100 bytes in 4000, not worth it
+
+// acoustid performs interning of chromaprint/fingerprints. as much as i would like
+// to do this (saving 5.59KiBs * 1 less chromaprint), it increases complexity and
+// i hate it when queries have multiple indirections
+
+// a source is a video/audio file, always containing some form of audio
+// width and height are optional, they are only present in video sources
+// WITHOUT-ROWID: source
+export const $source = sqliteTable('source', {
+	hash: text('hash').$type<FSRef>().primaryKey(),
+	track_id: integer('track_id').$type<TrackId>().notNull(),
+	width: integer('width'),
+	height: integer('height'),
+	bitrate: integer('bitrate').notNull(), // in Hz, not kHz (bitrate, not sample rate)
+	chromaprint: blob('chromaprint').$type<Uint8Array>(),
+	duration_s: real('duration_s'), // not accurate to source, but within 7 seconds
+}, (t) => ({
+	idx0: index("source.audio_fingerprint.idx0").on(t.duration_s, t.chromaprint),
+	// pk: index("source.idx").on(t.ident, t.hash, t.track_id),
 }))
