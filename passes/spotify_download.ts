@@ -4,8 +4,9 @@ import { fs_media_path, fs_sharded_path_noext_nonlazy } from "../fs"
 import { ident_cmd_unwrap_new, queue_complete, queue_pop, queue_retry_later, run_with_concurrency_limit } from "../pass_misc"
 import { dirname, basename } from 'path'
 import { FSRef } from "../types"
-import { $source } from "../schema"
+import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
+import { sql } from "drizzle-orm"
 
 const has_audio_source = sqlite.prepare<number, [string]>(`
 	select 1
@@ -57,15 +58,22 @@ export async function pass_source_download_from_spotify_track() {
 
 		const hash = (hash_part + '.ogg') as FSRef
 
-		db.insert($source)
-			.values({
-				hash,
-				track_id,
-				bitrate: 160000, // 160kbps
-			})
-			.run()
+		db.transaction(db => {
+			db.insert($source)
+				.values({
+					hash,
+					track_id,
+					bitrate: 160000, // 160kbps
+				})
+				.run()
 
-		queue_complete(entry)
+			db.update($spotify_track)
+				.set({ source: hash })
+				.where(sql`id = ${spotify_id}`)
+				.run()
+				
+			queue_complete(entry)
+		})
 		updated = true
 	})
 

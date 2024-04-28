@@ -3,7 +3,8 @@ import { db, sqlite } from "../db"
 import { ident_cmd_unwrap_new, queue_complete, queue_pop, queue_retry_later, run_with_concurrency_limit } from "../pass_misc"
 import { fs_sharded_path_noext_nonlazy } from "../fs"
 import { FSRef } from "../types"
-import { $source } from "../schema"
+import { $source, $youtube_video } from "../schema"
+import { sql } from "drizzle-orm"
 
 const has_video_source = sqlite.prepare<number, [string]>(`
 	select 1
@@ -66,17 +67,24 @@ export async function pass_source_download_from_youtube_video() {
 		const output: Output = JSON.parse(output_s)
 		const hash = (hash_part + '.' + output.ext) as FSRef
 
-		db.insert($source)
-			.values({
-				hash,
-				track_id,
-				width: output.width,
-				height: output.height,
-				bitrate: output.bitrate,
-			})
-			.run()
+		db.transaction(db => {
+			db.insert($source)
+				.values({
+					hash,
+					track_id,
+					width: output.width,
+					height: output.height,
+					bitrate: output.bitrate,
+				})
+				.run()
 
-		queue_complete(entry)
+			db.update($youtube_video)
+				.set({ source: hash })
+				.where(sql`id = ${youtube_id}`)
+				.run()
+
+			queue_complete(entry)
+		})
 		updated = true
 	})
 

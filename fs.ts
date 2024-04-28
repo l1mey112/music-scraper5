@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, statSync } from "fs"
 import { resolve } from "path"
 import { FSRef } from "./types"
 import { BunFile } from "bun"
-import { snowflake } from "./snowflake"
+import { nanoid } from "./ids"
 
 export const fs_media_path = resolve("db")
 
@@ -24,7 +24,7 @@ export function fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {
 }
 
 export function fs_sharded_path(dot_ext: string): [string, FSRef] {
-	const hash = (snowflake() + dot_ext) as FSRef
+	const hash = (nanoid() + dot_ext) as FSRef
 	const shard = hash.slice(0, 2)
 
 	// bun automatically creates folders
@@ -34,7 +34,7 @@ export function fs_sharded_path(dot_ext: string): [string, FSRef] {
 // append your own extension
 // creates the shard folder
 export function fs_sharded_path_noext_nonlazy(): [string, string] {
-	const hash = String(snowflake())
+	const hash = String(nanoid())
 	const shard = hash.slice(0, 2)
 
 	mkdirSync(`${fs_media_path}/${shard}`, { recursive: true })
@@ -43,7 +43,7 @@ export function fs_sharded_path_noext_nonlazy(): [string, string] {
 }
 
 export function fs_sharded_path_nonlazy(dot_ext: string): [string, FSRef] {
-	const hash = (snowflake() + dot_ext) as FSRef
+	const hash = (nanoid() + dot_ext) as FSRef
 	const shard = hash.slice(0, 2)
 
 	mkdirSync(`${fs_media_path}/${shard}`, { recursive: true })

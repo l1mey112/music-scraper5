@@ -21,7 +21,7 @@ export type TrackEntry = typeof $track.$inferInsert
 export type AlbumEntry = typeof $album.$inferInsert
 export type ArtistEntry = typeof $artist.$inferInsert
 
-// an FSRef is a <snowlake>.<ext> string
+// an FSRef is a <nanoid>.<ext> string
 export type FSRef = NewType<'FSRef', string>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'source'
