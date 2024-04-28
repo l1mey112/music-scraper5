@@ -186,7 +186,7 @@ export async function pass_artist_new_spotify_artist() {
 				artist_id,
 			})
 
-			queue_dispatch_chain_immediate('artist.meta.spotify_artist_supplementary', artist_id, ident)
+			queue_dispatch_chain_immediate('artist.meta.spotify_artist_supplementary', artist.id, ident)
 			queue_complete(entry)
 		})
 		updated = true

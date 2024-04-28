@@ -5,7 +5,9 @@ export const $track = sqliteTable('track', {
 	id: integer('id').$type<TrackId>().primaryKey(),
 
 	isrc: text('isrc'),
-})
+}, (t) => ({
+	idx0: index('track.isrc.idx0').on(t.isrc),
+}))
 
 export const $album = sqliteTable('album', {
 	id: integer('id').$type<AlbumId>().primaryKey(),

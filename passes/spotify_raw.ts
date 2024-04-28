@@ -12,25 +12,28 @@ export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArt
 	const text = await response.text()
 	const match = text.match(/<script\s+id="initial-state"\s+type="text\/plain">([^<]+)<\/script>/)
 	if (!match) {
+		console.log('spotify_raw_artist: no match')
 		return undefined
 	}
 
 	const data: RawArtistInitialData = JSON.parse(Buffer.from(match[1], 'base64').toString('utf-8'))
 	const qn = `spotify:artist:${spotify_id}`
 
+	const qnd = data.entities.items[qn]
 	let ret: SpotifyArtistInitialData
 	try {
 		ret = {
-			followers: data.entities.items[qn].stats.followers,
-			monthly_listeners: data.entities.items[qn].stats.monthlyListeners,
-			avatar_extracted_colour_dark: data.entities.items[qn].visuals.avatarImage.extractedColors.colorDark?.hex,
-			avatar_extracted_colour_raw: data.entities.items[qn].visuals.avatarImage.extractedColors.colorRaw?.hex,
-			external_links: data.entities.items[qn].profile.externalLinks.items.map(v => v.url),
-			biography: data.entities.items[qn].profile.biography.text,
-			header_images: data.entities.items[qn].visuals.headerImage.sources,
+			followers: qnd.stats.followers,
+			monthly_listeners: qnd.stats.monthlyListeners,
+			avatar_extracted_colour_dark: qnd.visuals.avatarImage.extractedColors.colorDark?.hex,
+			avatar_extracted_colour_raw: qnd.visuals.avatarImage.extractedColors.colorRaw?.hex,
+			external_links: qnd.profile.externalLinks.items.map(v => v.url),
+			biography: qnd.profile.biography.text,
+			header_images: qnd.visuals.headerImage?.sources ?? [],
 		}
 	} catch (e) {
 		console.log('spotify_raw_artist: caught', e)
+		console.log(qnd)
 		return undefined
 	}
 
@@ -69,10 +72,12 @@ export async function pass_artist_meta_spotify_supplementary() {
 
 			link_insert(links)
 
-			const largest: SpotifyImage | undefined = data.header_images.reduce((a, b) => a.width * a.height > b.width * b.height ? a : b)
+			if (data.header_images.length > 0) {
+				const largest: SpotifyImage | undefined = data.header_images.reduce((a, b) => a.width * a.height > b.width * b.height ? a : b)
 
-			if (largest) {
-				images_queue_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
+				if (largest) {
+					images_queue_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
+				}
 			}
 
 			queue_complete(entry)
@@ -124,16 +129,16 @@ interface RawArtistInitialData {
 						extractedColors: {
 							colorDark?: {
 								hex: string
-							}
+							} | null
 							colorRaw?: {
 								hex: string
-							}
+							} | null
 						}
 						sources: SpotifyImage[]
 					}
-					headerImage: {
+					headerImage?: {
 						sources: SpotifyImage[]
-					}
+					} | null
 				}
 			}
 		}

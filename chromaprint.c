@@ -40,6 +40,11 @@ static void acoustid_compare2(sqlite3_context *ctx, int argc, sqlite3_value **ar
 	int atype = sqlite3_value_type(argv[0]);
 	int btype = sqlite3_value_type(argv[1]);
 
+	if (atype == SQLITE_NULL || btype == SQLITE_NULL) {
+		sqlite3_result_null(ctx);
+		return;
+	}
+
 	if ((atype != SQLITE_TEXT && atype != SQLITE_BLOB) || (btype != SQLITE_TEXT && btype != SQLITE_BLOB)) {
 		sqlite3_result_error(ctx, "parameters 0 and 1 must be blob or text", -1);
 		return;

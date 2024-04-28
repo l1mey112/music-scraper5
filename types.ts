@@ -25,7 +25,7 @@ export type ArtistEntry = typeof $artist.$inferInsert
 export type FSRef = NewType<'FSRef', string>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'source'
-type PassKind = 'new' | 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag'
+type PassKind = 'new' | 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag' | 'merge'
 export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 type IdentComponents = `tr${string}` | `al${string}` | `ar${string}`
