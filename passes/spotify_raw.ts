@@ -3,7 +3,7 @@
 
 import { db } from "../db"
 import { nfetch } from "../fetch"
-import { ident_cmd_unwrap_new, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_pop, run_with_concurrency_limit } from "../pass_misc"
+import { ident_cmd_unwrap_new, images_queue_url, link_insert, link_urls_unknown, links_from_text, locale_insert, queue_complete, queue_pop, run_with_concurrency_limit } from "../pass_misc"
 import { Link, LinkEntry, LocaleDesc, LocaleEntry } from "../types"
 
 export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArtistInitialData | undefined> {	
@@ -52,13 +52,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 		db.transaction(db => {
 			const [ident, artist_id] = ident_cmd_unwrap_new(entry, 'artist_id')
 
-			const links: LinkEntry[] = data.external_links.map(url => {
-				return {
-					kind: Link["Unknown URL"],
-					data: url,
-					ident,
-				}
-			})
+			const links: LinkEntry[] = link_urls_unknown(ident, data.external_links)
 
 			if (data.biography) {
 				links.push(...links_from_text(ident, data.biography))

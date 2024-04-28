@@ -99,6 +99,7 @@ pass_state.parent_pass = pass_state.current_pass
 
 let inside_pass_job = false
 
+// this isn't a very good state machine
 async function state_machine(): Promise<PassError | undefined> {
 	// default state should be Running
 
@@ -145,10 +146,20 @@ async function state_machine(): Promise<PassError | undefined> {
 			}
 
 			// recursively enter the next pass
+			// skip over empty pass groups
+			// TODO: this still doesn't work
+			//       will show again if you have [[],] of passes
 			let pass
 			do {
 				pass = pass_state.current_pass.blocks[pass_state.current_pass.idx]
+				/* if (!pass) {
+					break
+				} */
 				if ('blocks' in pass) {
+					/* if (pass.blocks.length === 0) {
+						pass_state.current_pass.idx++
+						continue
+					} */
 					pass_state.current_pass = pass
 				}
 			} while ('blocks' in pass)

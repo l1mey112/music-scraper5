@@ -29,8 +29,11 @@ const cb: PassMutationFn = (state, error) => {
 	}
 
 	if (state.state == PassStateEnum.FinishedRunning) {
-		const timems = performance.now() - lasttime
-		console.log(`finished: ${state.current_pass_name} in`, Math.round(timems), 'ms')
+		// null name means finished group
+		if (state.current_pass_name) {
+			const timems = performance.now() - lasttime
+			console.log(`finished: ${state.current_pass_name} in`, Math.round(timems), 'ms')
+		}
 	}
 }
 

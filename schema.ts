@@ -101,6 +101,7 @@ export const $external_links = sqliteTable('external_links', {
 	ident: text('ident').$type<Ident>().notNull(),
 	kind: integer('kind').$type<Link>().notNull(),
 	data: text('data').notNull(),
+	dead: integer('dead', { mode: 'boolean' }).default(false).notNull(),
 }, (t) => ({
 	idx0: uniqueIndex('external_links.idx0').on(t.kind, t.ident, t.data),
 	idx1: index('external_links.idx1').on(t.ident, t.kind, t.data),

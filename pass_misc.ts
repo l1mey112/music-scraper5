@@ -4,6 +4,7 @@ import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spot
 import { snowflake } from "./snowflake"
 import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassIdentifier, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
+import { rowId } from "drizzle-orm/sqlite-core/expressions"
 
 // > A value with storage class NULL is considered less than any other value
 // https://www.sqlite.org/datatype3.html#sort_order
@@ -217,7 +218,7 @@ export function link_insert(link: LinkEntry | LinkEntry[]) {
 		if (i.kind != Link["Unknown URL"]) {
 			continue
 		}
-		
+
 		if (!i.data.startsWith('http://') && !i.data.startsWith('https://')) {
 			i.data = 'https://' + i.data
 		}
@@ -233,6 +234,39 @@ export function link_delete(link: LinkEntry & { rowid: number }) {
 	db.delete($external_links)
 		.where(sql`rowid = ${link.rowid}`)
 		.run()
+}
+
+export function link_kill(link: LinkEntry & { rowid: number }) {
+	db.update($external_links)
+		.set({ dead: true })
+		.where(sql`rowid = ${link.rowid}`)
+		.run()
+}
+
+export function link_select(kind: Link[] | Link = Link["Unknown URL"]): (LinkEntry & { rowid: number })[] {
+	if (!(kind instanceof Array)) {
+		kind = [kind]
+	}
+	
+	const k = db.select({
+		rowid: rowId(),
+		ident: $external_links.ident,
+		kind: $external_links.kind,
+		data: $external_links.data,
+	})
+		.from($external_links)
+		.where(sql`kind in ${kind} and dead = 0`)
+		.all()
+
+	return k
+}
+
+export function link_urls_unknown(ident: Ident, urls: string[]): LinkEntry[] {
+	return urls.map(url => ({
+		ident,
+		kind: Link["Unknown URL"],
+		data: url,
+	}))
 }
 
 export function locale_insert(locales: LocaleEntry | LocaleEntry[]) {
