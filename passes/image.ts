@@ -24,18 +24,17 @@ export async function pass_image_download_image_url() {
 			return
 		}
 
-		await db.transaction(async db => {
-			const ext = mime_ext(resp.headers.get("content-type"))
-			const [file, new_hash] = fs_sharded_lazy_bunfile(ext)
+		const ext = mime_ext(resp.headers.get("content-type"))
+		const [file, new_hash] = fs_sharded_lazy_bunfile(ext)
 
-			await Bun.write(file, resp)
+		await Bun.write(file, resp)
 
+		db.transaction(db => {
 			const size = sizeOf(fs_hash_path(new_hash))
 
 			if (!size.width || !size.height) {
 				// so damn rare, malformed image??
 				console.error(`sizeOf returned no width or height for ${new_hash}`, entry)
-
 				queue_retry_later(entry)
 				return
 			}
@@ -43,7 +42,6 @@ export async function pass_image_download_image_url() {
 			db.insert($images)
 				.values({ hash: new_hash, ident, kind: image_kind, width: size.width, height: size.height })
 				.run()
-
 
 			queue_complete(entry)
 			updated = true

@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
 import { $album, $artist, $external_links, $locale, $queue, $spotify_track, $track, $youtube_video } from "./schema"
 import { snowflake } from "./snowflake"
-import { AlbumId, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackId } from "./types"
+import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 
 // > A value with storage class NULL is considered less than any other value
@@ -145,10 +145,16 @@ export function locale_insert(locales: LocaleEntry | LocaleEntry[]) {
 		.run()
 }
 
-type KindTo = {
+type KindToId = {
 	track_id: TrackId
 	album_id: AlbumId
 	artist_id: ArtistId
+}
+
+type KindToEntry = {
+	track_id: TrackEntry
+	album_id: AlbumEntry
+	artist_id: ArtistEntry
 }
 
 export function ident_cmd(entry: QueueEntry): Ident {
@@ -158,23 +164,33 @@ export function ident_cmd(entry: QueueEntry): Ident {
 
 // ensures existence of the id in the table as well
 // will create in table if doesn't exist
-export function ident_cmd_unwrap<T extends keyof KindTo>(entry: QueueEntry, kind: T): [Ident, KindTo[T]] {
+// will set data as well
+// only really applicable for commands that create new entries, as it is used to overwrite the article entry with `data`
+export function ident_cmd_unwrap_new<T extends keyof KindToId>(entry: QueueEntry, kind: T, sdata?: Omit<KindToEntry[T], 'id'>): [Ident, KindToId[T]] {
 
 	// identify target
-	// 1. if the queue entry has a target, use that
+	// 1. ~~if the queue entry has a target, use that~~
 	// 2. if the queue command is for creating a track/album/artist from a third party source,
 	//    identify if that source already exists, then return the id associated with it
 	// 3. nothing found that already exists, just autogenerate and create
 
 	// 1.
-	if (entry.target) {
-		return [entry.target, ident_id(entry.target)]
+	assert(!entry.target)
+
+	const data: KindToEntry[T] = sdata ?? {}
+
+	const map: Record<keyof KindToId, SQLiteTable> = {
+		track_id: $track,
+		album_id: $album,
+		artist_id: $artist,
 	}
 
+	const pk_table = map[kind]
+
 	// 2.
-	const map2: Record<QueueCmd, [SQLiteTable, keyof KindTo] | null> = {
-		'track.new.youtube_video': [$youtube_video, 'track_id'],
-		'track.new.spotify_track': [$spotify_track, 'track_id'],
+	const map2: Record<QueueCmd, SQLiteTable | null> = {
+		'track.new.youtube_video': $youtube_video,
+		'track.new.spotify_track': $spotify_track,
 		'image.download.image_url': null,
 		/* [QueueCmd.yt_channel]: null, */
 	}
@@ -183,36 +199,34 @@ export function ident_cmd_unwrap<T extends keyof KindTo>(entry: QueueEntry, kind
 	assert(fk_table !== undefined, 'inexhaustive match')
 
 	if (fk_table) {
-		const [table, col] = fk_table
-
 		// the above types of commands only have a string payload
 		assert(typeof entry.payload === 'string')
 
-		const sel = db.select({ target: sql<Snowflake>`${sql.identifier(col)}` })
-			.from(table)
+		const sel = db.select({ target: sql<Snowflake>`${sql.identifier(kind)}` })
+			.from(fk_table)
 			.where(sql`id = ${entry.payload}`)
 			.get()
 
 		if (sel) {
-			return [ident(sel.target, col), sel.target as KindTo[T]]
+			// refresh data if possible
+			db.update(pk_table)
+				.set(data)
+				.where(sql`id = ${sel.target}`)
+				.run()
+
+			return [ident(sel.target, kind), sel.target as KindToId[T]]
 		}
 	}
 
 	// 3.
-	const target_id = snowflake() as KindTo[T]
-
-	const map3: Record<keyof KindTo, SQLiteTable> = {
-		track_id: $track,
-		album_id: $album,
-		artist_id: $artist,
-	}
+	const target_id = snowflake() as KindToId[T]
 
 	// ensure existence
 	// TODO: will need to possibly adjust the API to allow to actually provide
 	//       values for the `track`, `album`, `artist` tables
 	//       will need to also merge those data in on step 2+3, and create it in step 1
-	db.insert(map3[kind])
-		.values({ id: target_id } as any)
+	db.insert(pk_table)
+		.values({ ...data, id: target_id })
 		.onConflictDoNothing()
 		.run()
 

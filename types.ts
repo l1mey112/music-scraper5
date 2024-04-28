@@ -1,3 +1,5 @@
+import { $album, $artist, $track } from "./schema";
+
 // misc
 export type MaybePromise<T> = T | Promise<T>
 export type Override<T1, T2> = Omit<T1, keyof T2> & T2;
@@ -14,6 +16,10 @@ export type Snowflake = number
 export type TrackId = NewType<'TrackId', Snowflake>
 export type AlbumId = NewType<'AlbumId', Snowflake>
 export type ArtistId = NewType<'ArtistId', Snowflake>
+
+export type TrackEntry = typeof $track.$inferInsert
+export type AlbumEntry = typeof $album.$inferInsert
+export type ArtistEntry = typeof $artist.$inferInsert
 
 // an FSRef is a <snowlake>.<ext> string
 export type FSRef = NewType<'FSRef', string>
@@ -80,18 +86,8 @@ export type QueueEntry<T = unknown> = {
 	cmd: QueueCmd
 }
 
-export const queue_cmds = [
-	'track.new.youtube_video',
-	'track.new.spotify_track',
-	'image.download.image_url',
-	'artist.new.youtube_channel',
-] as const
-
-// ensure all queue commands are pass identifiers
-type _ = static_assert<type_extends<typeof queue_cmds, readonly PassIdentifier[]>>
-
 export type QueueCmdHashed = NewType<'QueueCmdHashed', number>
-export type QueueCmd = typeof queue_cmds[number]
+export type QueueCmd = PassIdentifier
 
 export type LinkEntry = {
 	ident: Ident

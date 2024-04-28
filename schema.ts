@@ -1,5 +1,5 @@
-import { SQLiteBigInt, index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, QueueCmd, QueueCmdHashed, TrackId } from "./types";
+import { index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, QueueCmdHashed, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
     id: integer('id').$type<TrackId>().primaryKey(),
@@ -47,6 +47,8 @@ export const $youtube_video = sqliteTable('youtube_video', {
 export const $spotify_track = sqliteTable('spotify_track', {
 	id: text('id').primaryKey(),
 	track_id: integer('track_id').$type<TrackId>().notNull(),
+
+	preview_url: text('preview_url'),
 })
 
 // rowid + composite unique index has a better query plans than without-rowid + composite primary key.
