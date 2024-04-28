@@ -25,7 +25,7 @@ export type ArtistEntry = typeof $artist.$inferInsert
 export type FSRef = NewType<'FSRef', string>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'sources'
-type PassKind = 'new' | 'extrapolate' | 'download' | 'classify' | 'tag'
+type PassKind = 'new' | 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag'
 export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 type IdentComponents = `tr${string}` | `al${string}` | `ar${string}`
@@ -36,6 +36,7 @@ const image_kind_tostring = {
 	yt_banner: 'YouTube Banner',
 	yt_tv_banner: 'YouTube TV Banner',
 	yt_mobile_banner: 'YouTube Mobile Banner',
+	sp_banner: 'Spotify Artist Banner',
 	cover_art: 'Cover Art',
 	profile_art: 'Profile Art',
 } as const

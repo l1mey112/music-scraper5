@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db";
 import { locale_from_bcp_47 } from "../locale";
-import { ident_cmd_unwrap_new, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, insert_canonical, run_batched_zip, insert_track_artist, ident_id, queue_dispatch_returning } from "../pass_misc";
+import { ident_cmd_unwrap_new, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, insert_canonical, run_batched_zip, insert_track_artist, ident_id, queue_dispatch_chain_returning } from "../pass_misc";
 import { $youtube_video } from "../schema";
 import { ArtistId, Locale, LocaleDesc, LocaleEntry, QueueEntry } from "../types";
 import { YoutubeImage, meta_youtube_video_v3 } from "./youtube_api";
@@ -124,7 +124,7 @@ export async function pass_track_new_youtube_video() {
 				channel_id: video.channelId,
 			})
 
-			const artist_ident = queue_dispatch_returning('artist.new.youtube_channel', video.channelId)
+			const artist_ident = queue_dispatch_chain_returning('artist.new.youtube_channel', video.channelId)
 			insert_track_artist(track_id, ident_id<ArtistId>(artist_ident))
 
 			locale_insert(locales)

@@ -1,8 +1,8 @@
 import { InferInsertModel, sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
-import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video } from "./schema"
+import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_artist, $album_track } from "./schema"
 import { snowflake } from "./snowflake"
-import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
+import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassIdentifier, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 
 // > A value with storage class NULL is considered less than any other value
@@ -13,7 +13,7 @@ import { SQLiteTable } from "drizzle-orm/sqlite-core"
 const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmdHashed]>(`
 	select rowid, target, payload from queue
 	where expiry <= ? and cmd = ?
-	order by expiry asc nulls first
+	order by expiry asc
 `)
 
 export function queue_pop<T = unknown>(cmd: QueueCmd): QueueEntry<T>[] {
@@ -63,6 +63,7 @@ function queue_hash_cmd(cmd: QueueCmd): QueueCmdHashed {
 
 type ArticleKind = 'track_id' | 'album_id' | 'artist_id'
 
+// only nonnull when command is *.new.*
 const cmd_desc: Record<QueueCmd, [SQLiteTable, ArticleKind] | null> = {
 	'track.new.youtube_video': [$youtube_video, 'track_id'],
 	'track.new.spotify_track': [$spotify_track, 'track_id'],
@@ -70,6 +71,7 @@ const cmd_desc: Record<QueueCmd, [SQLiteTable, ArticleKind] | null> = {
 	'artist.new.youtube_channel': [$youtube_channel, 'artist_id'],
 	'album.new.spotify_album': [$spotify_album, 'album_id'],
 	'artist.new.spotify_artist': [$spotify_artist, 'artist_id'],
+	'artist.meta.spotify_artist_supplementary': null,
 }
 
 const kind_desc: Record<ArticleKind, SQLiteTable> = {
@@ -102,15 +104,30 @@ function queue_identify_exiting_target(cmd: QueueCmd, payload: any): Ident | und
 
 // dispatch a command to be executed immediately
 // returning the target ident, which may or may not exist
-export function queue_dispatch_returning(cmd: QueueCmd, payload: any): Ident {
-	let target = queue_identify_exiting_target(cmd, payload)
+// work entries dispatched by other entries should use this function to avoid infinite loops
+export function queue_dispatch_chain_returning(cmd: QueueCmd, payload: any): Ident {
+	let target: Ident | undefined
+
+	if (!target) {
+		// find existing commands with target
+
+		const sel = db.select({ target: $queue.target })
+			.from($queue)
+			.where(sql`cmd = ${queue_hash_cmd(cmd)} and target != '' and payload = ${JSON.stringify(payload)}`)
+			.get()
+
+		if (sel) {
+			console.log('found existing target by cmd', sel.target, cmd)
+			return sel.target
+		}
+	}
 
 	if (!target) {
 		const desc = cmd_desc[cmd]
 		assert(desc !== undefined, `inexhaustive match (${cmd})`)
 		assert(desc !== null, 'command does not create anything')
 
-		const [table, col] = desc
+		const [_, col] = desc
 
 		target = ident(snowflake(), col)
 	}
@@ -120,8 +137,41 @@ export function queue_dispatch_returning(cmd: QueueCmd, payload: any): Ident {
 	return target
 }
 
+function verify_target(pass: PassIdentifier) {
+	const comp = pass.split('.')
+
+	assert(comp[1] === 'new', `pass must be a new pass (${pass})`)
+}
+
+// dispatch a command to be executed immediately
+// work entries dispatched by other entries should use this function to avoid infinite loops
+export function queue_dispatch_chain_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
+	if (!target) {
+		verify_target(cmd)
+	}
+
+	if (queue_identify_exiting_target(cmd, payload)) {
+		return
+	}
+
+	db.insert($queue)
+		.values({ cmd: queue_hash_cmd(cmd), target, payload })
+		.onConflictDoUpdate({
+			target: [$queue.target, $queue.cmd, $queue.payload],
+			set: {
+				expiry: 0,
+				try_count: 0,
+			}
+		})
+		.run()
+}
+
 // dispatch a command to be executed immediately
 export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
+	if (!target) {
+		verify_target(cmd)
+	}
+
 	target ??= queue_identify_exiting_target(cmd, payload)
 
 	db.insert($queue)
@@ -298,7 +348,7 @@ export function insert_canonical<T extends SQLiteTable>(table: T, canonical: str
 
 export function insert_track_artist(track_id: TrackId, artist_id: ArtistId | ArtistId[]) {
 	let values
-	
+
 	if (!(artist_id instanceof Array)) {
 		values = [{ track_id, artist_id }]
 	} else {
@@ -306,6 +356,36 @@ export function insert_track_artist(track_id: TrackId, artist_id: ArtistId | Art
 	}
 
 	db.insert($track_artist)
+		.values(values)
+		.onConflictDoNothing()
+		.run()
+}
+
+export function insert_album_artist(album_id: AlbumId, artist_id: ArtistId | ArtistId[]) {
+	let values
+
+	if (!(artist_id instanceof Array)) {
+		values = [{ album_id, artist_id }]
+	} else {
+		values = artist_id.map(artist_id => ({ album_id, artist_id }))
+	}
+
+	db.insert($album_artist)
+		.values(values)
+		.onConflictDoNothing()
+		.run()
+}
+
+export function insert_album_track(album_id: AlbumId, track_id: TrackId | TrackId[]) {
+	let values
+
+	if (!(track_id instanceof Array)) {
+		values = [{ album_id, track_id }]
+	} else {
+		values = track_id.map(track_id => ({ album_id, track_id }))
+	}
+
+	db.insert($album_track)
 		.values(values)
 		.onConflictDoNothing()
 		.run()
@@ -426,7 +506,8 @@ export function assert(condition: any, message?: string): asserts condition {
 		} else {
 			console.error('assertion failed')
 		}
-		console.log(new Error().stack)
-		process.exit(1)
+		throw new Error()
+		//console.log(new Error().stack)
+		//process.exit(1)
 	}
 }

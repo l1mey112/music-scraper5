@@ -2,30 +2,53 @@ import { index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-
 import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, QueueCmdHashed, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
-    id: integer('id').$type<TrackId>().primaryKey(),
+	id: integer('id').$type<TrackId>().primaryKey(),
 
-    isrc: text('isrc'),
+	isrc: text('isrc'),
 })
 
 export const $album = sqliteTable('album', {
-    id: integer('id').$type<AlbumId>().primaryKey(),
+	id: integer('id').$type<AlbumId>().primaryKey(),
 })
 
 export const $artist = sqliteTable('artist', {
-    id: integer('id').$type<ArtistId>().primaryKey(),
+	id: integer('id').$type<ArtistId>().primaryKey(),
 })
 
 // search where track_id = ?, order by id asc
 // unfortunately, can't find a way to perform order by rowid optimisations, the id needs to be placed inside the index
 // - SEARCH track_artist USING COVERING INDEX track_artist.idx0 (track_id=?)
 export const $track_artist = sqliteTable('track_artist', {
-    id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
+	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
 
 	// role, etc
 }, (t) => ({
 	idx0: index('track_artist.idx0').on(t.track_id, t.id, t.artist_id),
+	unq: unique('track_artist.unq').on(t.track_id, t.artist_id),
+}))
+
+export const $album_artist = sqliteTable('album_artist', {
+	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
+	album_id: integer('album_id').$type<AlbumId>().notNull(),
+	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
+
+	// role, etc
+}, (t) => ({
+	idx0: index('album_artist.idx0').on(t.album_id, t.id, t.artist_id),
+	unq: unique('album_artist.unq').on(t.album_id, t.artist_id),
+}))
+
+export const $album_track = sqliteTable('album_track', {
+	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
+	album_id: integer('album_id').$type<AlbumId>().notNull(),
+	track_id: integer('track_id').$type<TrackId>().notNull(),
+
+	// role, etc
+}, (t) => ({
+	idx0: index('album_track.idx0').on(t.album_id, t.id, t.track_id),
+	unq: unique('album_track.unq').on(t.album_id, t.track_id),
 }))
 
 // persistent store
