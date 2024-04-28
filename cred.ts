@@ -107,6 +107,6 @@ export function pass_spotify_api(): SpotifyApi {
 	return _spotify_api
 }
 
-export function zotify_credentials(): [string, string] {
+export function pass_zotify_credentials(): [string, string] {
 	return pass_cred_get('spotify_dl_user')[0]
 }

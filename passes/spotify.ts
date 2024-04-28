@@ -1,8 +1,8 @@
 import { pass_spotify_api } from "../cred"
 import { db } from "../db"
 import { locale_current } from "../locale"
-import { ident_cmd_unwrap_new, ident_id, images_queue_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, queue_complete, queue_dispatch_chain_returning, queue_pop, queue_retry_later, run_batched_zip, queue_dispatch_chain_immediate } from "../pass_misc"
-import { ArtistId, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
+import { ident_cmd_unwrap_new, ident_id, images_queue_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, queue_complete, queue_dispatch_chain_returning, queue_pop, queue_retry_later, run_batched_zip, queue_dispatch_chain_immediate, queue_dispatch_immediate } from "../pass_misc"
+import { ArtistId, ImageKind, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { $spotify_album, $spotify_artist, $spotify_track, $youtube_video } from "../schema"
 
 // track.new.spotify_track
@@ -58,6 +58,7 @@ export async function pass_track_new_spotify_track() {
 			}
 
 			insert_canonical($spotify_track, track.id, spotify_id, data)
+			queue_dispatch_immediate('source.download.from_spotify_track', spotify_id, ident)
 			queue_complete(entry)
 		})
 		updated = true
@@ -125,7 +126,7 @@ export async function pass_album_new_spotify_album() {
 
 			// > The cover art for the album in various sizes, widest first.
 			const largest = album.images[0]
-			images_queue_url(ident, 'cover_art', largest.url)
+			images_queue_url(ident, ImageKind["Cover Art"], largest.url)
 
 			insert_canonical($spotify_album, album.id, spotify_id, {
 				album_id,
@@ -178,7 +179,7 @@ export async function pass_artist_new_spotify_artist() {
 			// > The cover art for the artist in various sizes, widest first.
 			const largest = artist.images[0]
 			if (largest) {
-				images_queue_url(ident, 'profile_art', largest.url)
+				images_queue_url(ident, ImageKind["Profile Art"], largest.url)
 			}
 
 			insert_canonical($spotify_artist, artist.id, spotify_id, {

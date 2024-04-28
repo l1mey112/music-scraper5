@@ -107,7 +107,11 @@ function queue_identify_exiting_target(cmd: QueueCmd, payload: any): Ident | und
 // returning the target ident, which may or may not exist
 // work entries dispatched by other entries should use this function to avoid infinite loops
 export function queue_dispatch_chain_returning(cmd: QueueCmd, payload: any): Ident {
-	let target: Ident | undefined
+	let target: Ident | undefined = queue_identify_exiting_target(cmd, payload)
+
+	if (target) {
+		return target
+	}
 
 	if (!target) {
 		// find existing commands with target
@@ -356,6 +360,7 @@ export function ident_cmd_unwrap_new<T extends ArticleKind>(entry: QueueEntry, k
 // will completely replace rows
 export function insert_canonical<T extends SQLiteTable>(table: T, canonical: string, known: string, data: Omit<InferInsertModel<T>, 'id'>) {
 	if (canonical !== known) {
+		console.log('insert_canonical', canonical, known)
 		db.delete(table)
 			.where(sql`id = ${canonical}`)
 			.run()

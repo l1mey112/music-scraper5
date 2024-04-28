@@ -8,7 +8,7 @@ import { $source } from "../schema"
 const has_video_source = sqlite.prepare<number, [string]>(`
 	select 1
 	from youtube_video
-	where id = ? and video_source is not null
+	where id = ? and source is not null
 `)
 
 // source.download.from_youtube_video
