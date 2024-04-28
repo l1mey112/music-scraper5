@@ -1,6 +1,6 @@
-import { sql } from "drizzle-orm"
+import { InferInsertModel, sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
-import { $album, $artist, $external_links, $locale, $queue, $spotify_track, $track, $youtube_video } from "./schema"
+import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video } from "./schema"
 import { snowflake } from "./snowflake"
 import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
@@ -35,7 +35,7 @@ export function queue_pop<T = unknown>(cmd: QueueCmd): QueueEntry<T>[] {
 // increments `retry_count` which can be used to determine if the entry should be removed after manual review
 export function queue_retry_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
 	db.update($queue)
-		.set({ expiry: Date.now() + expiry_after_millis, retry_count: sql`${$queue.retry_count} + 1` })
+		.set({ expiry: Date.now() + expiry_after_millis, try_count: sql`${$queue.try_count} + 1` })
 		.where(sql`rowid = ${entry.rowid}`)
 		.run()
 }
@@ -61,15 +61,76 @@ function queue_hash_cmd(cmd: QueueCmd): QueueCmdHashed {
 	return Bun.hash.cityHash32(cmd) as QueueCmdHashed
 }
 
+type ArticleKind = 'track_id' | 'album_id' | 'artist_id'
+
+const cmd_desc: Record<QueueCmd, [SQLiteTable, ArticleKind] | null> = {
+	'track.new.youtube_video': [$youtube_video, 'track_id'],
+	'track.new.spotify_track': [$spotify_track, 'track_id'],
+	'image.download.image_url': null,
+	'artist.new.youtube_channel': [$youtube_channel, 'artist_id'],
+	'album.new.spotify_album': [$spotify_album, 'album_id'],
+	'artist.new.spotify_artist': [$spotify_artist, 'artist_id'],
+}
+
+const kind_desc: Record<ArticleKind, SQLiteTable> = {
+	track_id: $track,
+	album_id: $album,
+	artist_id: $artist,
+}
+
+function queue_identify_exiting_target(cmd: QueueCmd, payload: any): Ident | undefined {
+	const desc = cmd_desc[cmd]
+	assert(desc !== undefined, `inexhaustive match (${cmd})`)
+
+	if (desc) {
+		// the above types of commands only have a string payload
+		assert(typeof payload === 'string')
+
+		const [table, col] = desc
+
+		const sel = db.select({ target: sql<Snowflake>`${sql.identifier(col)}` })
+			.from(table)
+			.where(sql`id = ${payload}`)
+			.get()
+
+		if (sel) {
+			console.log('found existing target', sel.target, col, cmd)
+			return ident(sel.target, col)
+		}
+	}
+}
+
+// dispatch a command to be executed immediately
+// returning the target ident, which may or may not exist
+export function queue_dispatch_returning(cmd: QueueCmd, payload: any): Ident {
+	let target = queue_identify_exiting_target(cmd, payload)
+
+	if (!target) {
+		const desc = cmd_desc[cmd]
+		assert(desc !== undefined, `inexhaustive match (${cmd})`)
+		assert(desc !== null, 'command does not create anything')
+
+		const [table, col] = desc
+
+		target = ident(snowflake(), col)
+	}
+
+	queue_dispatch_immediate(cmd, payload, target)
+
+	return target
+}
+
 // dispatch a command to be executed immediately
 export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
+	target ??= queue_identify_exiting_target(cmd, payload)
+
 	db.insert($queue)
 		.values({ cmd: queue_hash_cmd(cmd), target, payload })
 		.onConflictDoUpdate({
 			target: [$queue.target, $queue.cmd, $queue.payload],
 			set: {
 				expiry: 0,
-				retry_count: 0,
+				try_count: 0,
 			}
 		})
 		.run()
@@ -83,7 +144,7 @@ export function queue_dispatch_later(cmd: QueueCmd, payload: any, target: Ident,
 			target: [$queue.target, $queue.cmd, $queue.payload],
 			set: {
 				expiry: Date.now() + expiry_after_millis,
-				retry_count: 0,
+				try_count: 0,
 			}
 		})
 		.run()
@@ -166,74 +227,91 @@ export function ident_cmd(entry: QueueEntry): Ident {
 // will create in table if doesn't exist
 // will set data as well
 // only really applicable for commands that create new entries, as it is used to overwrite the article entry with `data`
-export function ident_cmd_unwrap_new<T extends keyof KindToId>(entry: QueueEntry, kind: T, sdata?: Omit<KindToEntry[T], 'id'>): [Ident, KindToId[T]] {
+export function ident_cmd_unwrap_new<T extends ArticleKind>(entry: QueueEntry, kind: T, _data?: Omit<KindToEntry[T], 'id'>): [Ident, KindToId[T]] {
 
 	// identify target
-	// 1. ~~if the queue entry has a target, use that~~
-	// 2. if the queue command is for creating a track/album/artist from a third party source,
-	//    identify if that source already exists, then return the id associated with it
-	// 3. nothing found that already exists, just autogenerate and create
+	// 1. if the queue entry has a target, use that
+	//    it will either not exist, or already exist
+	// 2. nothing found that already exists, just autogenerate and create
 
-	// 1.
-	assert(!entry.target)
+	// identifying if the source id already exists then extracting the target ident
+	// is already performed in `queue_identify_exiting_target`
 
-	const data: KindToEntry[T] = sdata ?? {}
+	const data: KindToEntry[T] = _data ?? {}
+	let target = entry.target
 
-	const map: Record<keyof KindToId, SQLiteTable> = {
-		track_id: $track,
-		album_id: $album,
-		artist_id: $artist,
+	if (!target) {
+		target = ident(snowflake(), kind)
 	}
 
-	const pk_table = map[kind]
+	const pk_table = kind_desc[kind]
 
-	// 2.
-	const map2: Record<QueueCmd, SQLiteTable | null> = {
-		'track.new.youtube_video': $youtube_video,
-		'track.new.spotify_track': $spotify_track,
-		'image.download.image_url': null,
-		/* [QueueCmd.yt_channel]: null, */
+	const target_id = ident_id<KindToId[T]>(target)
+
+	if (Object.keys(data).length > 0) {
+		db.insert(pk_table)
+			.values({ ...data, id: target_id })
+			.onConflictDoUpdate({
+				target: sql`${pk_table}."id"`,
+				set: data
+			})
+			.run()
+	} else {
+		db.insert(pk_table)
+			.values({ ...{} as KindToEntry[T], id: target_id })
+			.onConflictDoNothing()
+			.run()
 	}
-
-	const fk_table = map2[entry.cmd]
-	assert(fk_table !== undefined, 'inexhaustive match')
-
-	if (fk_table) {
-		// the above types of commands only have a string payload
-		assert(typeof entry.payload === 'string')
-
-		const sel = db.select({ target: sql<Snowflake>`${sql.identifier(kind)}` })
-			.from(fk_table)
-			.where(sql`id = ${entry.payload}`)
-			.get()
-
-		if (sel) {
-			// refresh data if possible
-			db.update(pk_table)
-				.set(data)
-				.where(sql`id = ${sel.target}`)
-				.run()
-
-			return [ident(sel.target, kind), sel.target as KindToId[T]]
-		}
-	}
-
-	// 3.
-	const target_id = snowflake() as KindToId[T]
-
-	// ensure existence
-	// TODO: will need to possibly adjust the API to allow to actually provide
-	//       values for the `track`, `album`, `artist` tables
-	//       will need to also merge those data in on step 2+3, and create it in step 1
-	db.insert(pk_table)
-		.values({ ...data, id: target_id })
-		.onConflictDoNothing()
-		.run()
 
 	return [ident(target_id, kind), target_id]
 }
 
-export function ident(target: Snowflake, kind: 'track_id' | 'album_id' | 'artist_id'): Ident {
+// the API might return a different id (canonical), instead of the id we know (known)
+// canonical <- known (into canonical)
+// will completely replace rows
+export function insert_canonical<T extends SQLiteTable>(table: T, canonical: string, known: string, data: Omit<InferInsertModel<T>, 'id'>) {
+	if (canonical !== known) {
+		db.delete(table)
+			.where(sql`id = ${canonical}`)
+			.run()
+	}
+
+	// there are bugs if you type it as Omit<InferInsertModel<T>, 'id'>
+	// some properties just disappear
+	delete (data as any).id
+
+	db.insert(table)
+		.values({ ...data, id: canonical } as any) // sigh
+		.onConflictDoUpdate({
+			target: sql`${table}."id"`,
+			set: data as any, // sigh2
+		})
+		.run()
+
+	if (canonical !== known) {
+		db.update(table)
+			.set({ id: canonical })
+			.where(sql`id = ${known}`)
+			.run()
+	}
+}
+
+export function insert_track_artist(track_id: TrackId, artist_id: ArtistId | ArtistId[]) {
+	let values
+	
+	if (!(artist_id instanceof Array)) {
+		values = [{ track_id, artist_id }]
+	} else {
+		values = artist_id.map(artist_id => ({ track_id, artist_id }))
+	}
+
+	db.insert($track_artist)
+		.values(values)
+		.onConflictDoNothing()
+		.run()
+}
+
+export function ident(target: Snowflake, kind: ArticleKind): Ident {
 	let prefix
 
 	switch (kind) {

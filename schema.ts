@@ -17,15 +17,15 @@ export const $artist = sqliteTable('artist', {
 
 // search where track_id = ?, order by id asc
 // unfortunately, can't find a way to perform order by rowid optimisations, the id needs to be placed inside the index
-// - SEARCH artist_track USING COVERING INDEX artist_track.idx0 (track_id=?)
-export const $artist_track = sqliteTable('artist_track', {
+// - SEARCH track_artist USING COVERING INDEX track_artist.idx0 (track_id=?)
+export const $track_artist = sqliteTable('track_artist', {
     id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
 
 	// role, etc
 }, (t) => ({
-	idx0: index('artist_track.idx0').on(t.track_id, t.id, t.artist_id),
+	idx0: index('track_artist.idx0').on(t.track_id, t.id, t.artist_id),
 }))
 
 // persistent store
@@ -43,12 +43,30 @@ export const $youtube_video = sqliteTable('youtube_video', {
 	channel_id: text('channel_id').notNull(),
 })
 
+// WITHOUT-ROWID: youtube_channel
+export const $youtube_channel = sqliteTable('youtube_channel', {
+	id: text('id').primaryKey(),
+	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
+})
+
 // WITHOUT-ROWID: spotify_track
 export const $spotify_track = sqliteTable('spotify_track', {
 	id: text('id').primaryKey(),
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 
 	preview_url: text('preview_url'),
+})
+
+// WITHOUT-ROWID: spotify_artist
+export const $spotify_album = sqliteTable('spotify_album', {
+	id: text('id').primaryKey(),
+	album_id: integer('album_id').$type<AlbumId>().notNull(),
+})
+
+// WITHOUT-ROWID: spotify_artist
+export const $spotify_artist = sqliteTable('spotify_artist', {
+	id: text('id').primaryKey(),
+	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
 })
 
 // rowid + composite unique index has a better query plans than without-rowid + composite primary key.
@@ -84,7 +102,7 @@ export const $queue = sqliteTable('queue', {
 	payload: text('payload', { mode: "json" }).notNull(), // data decided by the work cmd
 
 	expiry: integer('expiry').default(0).notNull(), // unix millis, zero for immediate
-	retry_count: integer('retry_count').default(0).notNull(), // amount of retries thus far
+	try_count: integer('try_count').default(0).notNull(), // amount of tries thus far
 }, (t) => ({
 	idx0: index('queue.idx0').on(t.expiry, t.cmd),
 	uniq: unique('queue.uniq').on(t.target, t.cmd, t.payload), // unique for removing duplicates

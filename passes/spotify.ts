@@ -1,9 +1,8 @@
-import { sql } from "drizzle-orm"
 import { pass_spotify_api } from "../cred"
 import { db } from "../db"
 import { locale_current } from "../locale"
-import { ident_cmd_unwrap_new, locale_insert, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, run_batched_zip } from "../pass_misc"
-import { Locale, LocaleDesc, LocaleEntry, QueueEntry } from "../types"
+import { ident_cmd_unwrap_new, ident_id, insert_canonical, insert_track_artist, locale_insert, queue_complete, queue_dispatch_immediate, queue_dispatch_returning, queue_pop, queue_retry_later, run_batched_zip } from "../pass_misc"
+import { ArtistId, Locale, LocaleDesc, LocaleEntry, QueueEntry } from "../types"
 import { $spotify_track, $youtube_video } from "../schema"
 
 // track.new.spotify_track
@@ -29,40 +28,35 @@ export async function pass_track_new_spotify_track() {
 			return
 		}
 
-		const spotify_id = entry.payload
-		const isrc: string | null | undefined = track.external_ids.isrc
-		const [ident, track_id] = ident_cmd_unwrap_new(entry, 'track_id', { isrc })
-
-		const spotify_album_id = track.album.id
-
-		const name: LocaleEntry = {
-			ident,
-			locale: locale_current(), // assumed
-			desc: LocaleDesc.name,
-			text: track.name,
-			preferred: true,
-		}
-
 		db.transaction(db => {
+			const spotify_id = entry.payload
+			const isrc: string | null | undefined = track.external_ids.isrc
+			const [ident, track_id] = ident_cmd_unwrap_new(entry, 'track_id', { isrc })
+
+			const spotify_album_id = track.album.id
+
+			const name: LocaleEntry = {
+				ident,
+				locale: locale_current(), // assumed
+				desc: LocaleDesc.name,
+				text: track.name,
+				preferred: true,
+			}
+
 			queue_dispatch_immediate('album.new.spotify_album', spotify_album_id)
 			for (const spotify_artist of track.artists) {
-				queue_dispatch_immediate('artist.new.spotify_artist', spotify_artist.id)
+				const artist_ident = queue_dispatch_returning('artist.new.spotify_artist', spotify_artist.id)
+				insert_track_artist(track_id, ident_id<ArtistId>(artist_ident))
 			}
 
 			locale_insert(name)
 
-			db.run(sql`
-				insert or replace into ${$spotify_track} (id, track_id, preview_url)
-				values (${spotify_id}, ${track_id}, ${track.preview_url})
-			`)
-
-			if (spotify_id != track.id) {
-				console.log('updating spotify track id', spotify_id, '->', track.id)
-				db.run(sql`
-					update or replace ${$spotify_track} set id = ${track.id}
-					where id = ${spotify_id}
-				`)
+			const data = {
+				track_id,
+				preview_url: track.preview_url,
 			}
+
+			insert_canonical($spotify_track, track.id, spotify_id, data)
 
 			queue_complete(entry)
 			updated = true
