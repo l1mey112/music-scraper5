@@ -11,6 +11,10 @@ cmds=(
 
 	# faker
 	"track.new.youtube_video" "among_fake"
+
+	# slave vvr
+	"track.new.spotify_track" "7GHLlh8JZedHUVhsf0sC2L"
+	"track.new.youtube_video" "SZeabHMbOos"
 )
 
 sh/queue_imm.ts "${cmds[@]}"

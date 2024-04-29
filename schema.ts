@@ -164,8 +164,6 @@ export const $images = sqliteTable('images', {
 export const $source = sqliteTable('source', {
 	hash: text('hash').$type<FSRef>().primaryKey(),
 	track_id: integer('track_id').$type<TrackId>().notNull(),
-	width: integer('width'),
-	height: integer('height'),
 	bitrate: integer('bitrate').notNull(), // in bps, not kbps (bitrate, not sample rate)
 	chromaprint: blob('chromaprint').$type<Uint8Array>(),
 	duration_s: real('duration_s'), // not accurate to source, but within 7 seconds

@@ -1,6 +1,6 @@
 import { $ } from "bun"
 import { pass_zotify_credentials } from "../cred"
-import { fs_media_path, fs_sharded_path_noext_nonlazy } from "../fs"
+import { fs_root, fs_sharded_path_noext_nonlazy } from "../fs"
 import { ident_cmd_unwrap_new, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, run_with_concurrency_limit } from "../pass_misc"
 import { dirname, basename } from 'path'
 import { FSRef } from "../types"
@@ -40,11 +40,11 @@ export async function pass_source_download_from_spotify_track() {
 		//           ^^^
 		// root: db/
 		// path: xx/??
-		const file = path.slice(fs_media_path.length + 1)
+		const file = path.slice(fs_root.length + 1)
 
 		try {
 			// 160kbps (highest for free users)
-			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --root-path ${fs_media_path} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
+			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --root-path ${fs_root} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
 			// sometimes zotify doesn't return nonzero exit code on failure
 			const stdout = sh.stdout.toString()
 			if (stdout.includes('SONG IS UNAVAILABLE') || stdout.includes('SKIPPING')) {

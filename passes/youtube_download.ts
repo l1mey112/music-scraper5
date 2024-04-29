@@ -38,21 +38,19 @@ export async function pass_source_download_from_youtube_video() {
 
 		type Output = {
 			ext: string
-			width: number
-			height: number
 			duration: number
 			bitrate: number
 		}
 
 		const args = [
 			"-f",
-			"bestvideo+bestaudio/best",
+			"bestaudio",
 			`https://www.youtube.com/watch?v=${youtube_id}`,
 			"-o",
 			path + ".%(ext)s",
 			"--no-simulate",
 			"--print",
-			"{\"ext\":%(ext)j,\"width\":%(width)j,\"height\":%(height)j,\"duration\":%(duration)j,\"bitrate\":%(abr)j}",
+			"{\"ext\":%(ext)j,\"duration\":%(duration)j,\"bitrate\":%(abr)j}",
 		]
 
 		let output_s
@@ -72,8 +70,6 @@ export async function pass_source_download_from_youtube_video() {
 				.values({
 					hash,
 					track_id,
-					width: output.width,
-					height: output.height,
 					bitrate: output.bitrate * 1000, // kbps to bps
 				})
 				.run()

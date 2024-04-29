@@ -23,14 +23,14 @@ export const passes: PassElement[] = [
 		{ name: 'artist.meta.spotify_artist_supplementary', fn: pass_artist_meta_spotify_supplementary },
 		[
 			{ name: 'link.classify.weak', fn: pass_link_classify_weak },
-			{ name: 'link.classify.link_shorteners', fn: pass_link_classify_link_shorteners },
-			{ name: 'link.extrapolate.from_linkcore', fn: pass_link_extrapolate_from_linkcore },
-			{ name: 'link.extrapolate.from_lnk_to', fn: pass_link_extrapolate_from_lnk_to },
+			//{ name: 'link.classify.link_shorteners', fn: pass_link_classify_link_shorteners },
+			//{ name: 'link.extrapolate.from_linkcore', fn: pass_link_extrapolate_from_linkcore },
+			//{ name: 'link.extrapolate.from_lnk_to', fn: pass_link_extrapolate_from_lnk_to },
 		],
 	],
 	{ name: 'image.download.image_url', fn: pass_image_download_image_url },
 	{ name: 'source.download.from_youtube_video', fn: pass_source_download_from_youtube_video },
 	{ name: 'source.download.from_spotify_track', fn: pass_source_download_from_spotify_track },
 	{ name: 'source.classify.chromaprint', fn: pass_source_classify_chromaprint },
-	//{ name: 'track.merge.using_known_heuristics', fn: pass_track_merge_using_known_heuristics },
+	{ name: 'track.merge.using_known_heuristics', fn: pass_track_merge_using_known_heuristics },
 ]

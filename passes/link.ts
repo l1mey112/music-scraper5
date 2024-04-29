@@ -198,7 +198,7 @@ export async function pass_link_classify_link_shorteners() {
 	// match only the ones that are in the list
 	k = k.filter(({ data }) => link_classify(data, link_shorteners_classify))
 
-	await run_with_concurrency_limit(k, 4, async (link) => {
+	await run_with_concurrency_limit(k, 16, async (link) => {
 		const req = await fetch(link.data)
 
 		// even if it passes through the shortener
@@ -218,6 +218,7 @@ export async function pass_link_classify_link_shorteners() {
 			link_delete(link)
 			link.data = req.url
 			link_insert(link)
+			console.log('successful', link)
 		})
 		updated = true
 	})

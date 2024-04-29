@@ -6,14 +6,11 @@ import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, Lin
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
 
-// > A value with storage class NULL is considered less than any other value
-// https://www.sqlite.org/datatype3.html#sort_order
-
 // QUERY PLAN
 // `--SEARCH queue USING INDEX queue.idx0 (expiry<?)
 const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmdHashed]>(`
 	select rowid, target, payload from queue
-	where expiry <= ? and cmd = ?
+	where expiry < ? and cmd = ?
 	order by expiry asc
 `)
 
@@ -97,7 +94,6 @@ function queue_identify_exiting_target(cmd: QueueCmd, payload: any): Ident | und
 			.get()
 
 		if (sel) {
-			console.log('found existing target', sel.target, col, cmd)
 			return ident(sel.target, col)
 		}
 	}
@@ -122,7 +118,6 @@ export function queue_dispatch_chain_returning(cmd: QueueCmd, payload: any): Ide
 			.get()
 
 		if (sel) {
-			console.log('found existing target by cmd', sel.target, cmd)
 			return sel.target
 		}
 	}
@@ -146,6 +141,24 @@ function verify_new_target(pass: PassIdentifier) {
 	const comp = pass.split('.')
 
 	assert(comp[1] === 'new', `pass must be a new pass (${pass})`)
+}
+
+// dispatch a command to be executed immediately
+// work entries dispatched by other entries should use this function to avoid infinite loops
+// won't also reset expiry or try counts
+export function queue_dispatch_seed(cmd: QueueCmd, payload: any, target?: Ident) {
+	if (!target) {
+		verify_new_target(cmd)
+	}
+
+	if (queue_identify_exiting_target(cmd, payload)) {
+		return
+	}
+
+	db.insert($queue)
+		.values({ cmd: queue_hash_cmd(cmd), target, payload })
+		.onConflictDoNothing()
+		.run()
 }
 
 // dispatch a command to be executed immediately

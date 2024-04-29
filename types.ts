@@ -26,7 +26,37 @@ export type FSRef = NewType<'FSRef', string>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'source'
 type PassKind = 'new' | 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag' | 'merge'
-export type PassIdentifier = `${PassField}.${PassKind}.${string}`
+type PassIdentifierTemplate = `${PassField}.${PassKind}.${string}`
+
+type PassIdentifierList = typeof known_pass_identifiers
+export const known_pass_identifiers = [
+	'track.new.youtube_video',
+	'track.new.spotify_track',
+
+	'album.new.spotify_album',
+
+	'artist.new.youtube_channel',
+	'artist.new.spotify_artist',
+	'artist.meta.spotify_artist_supplementary',
+
+	'link.classify.weak',
+	'link.classify.link_shorteners',
+	'link.extrapolate.from_linkcore',
+	'link.extrapolate.from_lnk_to',
+
+	'source.download.from_youtube_video',
+	'source.download.from_spotify_track',
+	'source.classify.chromaprint',
+
+	'image.download.image_url',
+
+	'track.merge.using_known_heuristics',
+] as const
+
+// ensure all queue commands are pass identifiers
+type _ = static_assert<type_extends<PassIdentifierList, readonly PassIdentifierTemplate[]>>
+
+export type PassIdentifier = PassIdentifierList[number]
 
 type IdentComponents = `tr${string}` | `al${string}` | `ar${string}`
 export type Ident = NewType<'Ident', IdentComponents>

@@ -1,6 +1,7 @@
 import { db_close } from "./db";
 import { PassMutationFn, PassStateEnum, pass, pass_state_tostring } from "./pass";
 import { pass_track_new_spotify_index_liked } from "./passes/spotify_liked";
+import './seed' // seed the queue
 
 function exit() {
 	db_close()

@@ -25,7 +25,7 @@ export async function pass_link_extrapolate_from_linkcore() {
 	//    title="Available on Deezer"
 	//    data-store="3805">
 
-	await run_with_concurrency_limit(k, 4, async (link) => {
+	await run_with_concurrency_limit(k, 16, async (link) => {
 		const derived_urls: string[] = []
 
 		// begins with store_id_
@@ -73,7 +73,7 @@ export async function pass_link_extrapolate_from_lnk_to() {
 
 	// extract everything with data-linkid
 
-	await run_with_concurrency_limit(k, 4, async (link) => {
+	await run_with_concurrency_limit(k, 16, async (link) => {
 		const derived_urls: string[] = []
 
 		const html_extractor = new HTMLRewriter().on('a[data-linkid]', {

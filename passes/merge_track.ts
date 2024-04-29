@@ -68,10 +68,9 @@ const track_chromaprint = sqlite.prepare<{ track_id1: TrackId, track_id2: TrackI
 		inner join track t1 on t1.id = t1s.track_id
 		inner join source t2s on t2.id = t2s.track_id
 		full outer join track t2 on t1.id < t2.id
-	where (t1.isrc is null or t2.isrc is null)
-		and unlikely(score > 0.90)
+	where --(t1.isrc is null or t2.isrc is null) and 
+		unlikely(score > 0.90)
 		and t2s.duration_s between t1s.duration_s - 7 and t1s.duration_s + 7
-	order by score desc
 `)
 
 // will need to go ahead and merge one into the other
@@ -99,7 +98,7 @@ function merge_track(track_id1: TrackId, track_id2: TrackId) {
 				.where(sql`track_id = ${track_id2}`)
 				.run()
 		}
-		
+
 		for (const table of migration_tables_ident) {
 			db.update(table)
 				.set({ ident: track_id1_ident })
@@ -120,9 +119,20 @@ function merge_track(track_id1: TrackId, track_id2: TrackId) {
 			.where(sql`id = ${track_id2}`)
 			.get()!
 
+		// remove all keys that are undefined or null
+		function clear_null(obj: any) {
+			for (const key in obj) {
+				if (obj[key] === undefined || obj[key] === null) {
+					delete obj[key]
+				}
+			}
+		}
+
+		clear_null(track_id1_obj)
+
 		const merged_track = {
-			...track_id1_obj,
 			...track_id2_obj,
+			...track_id1_obj,
 		}
 
 		delete (merged_track as any).id // sure
@@ -166,7 +176,8 @@ export function pass_track_merge_using_known_heuristics() {
 		merge_set(track_id1, track_id2)
 	}
 
-	for (const { track_id1, track_id2 } of track_chromaprint.all()) {
+	for (const { track_id1, track_id2, score } of track_chromaprint.all()) {
+		console.log(`chromaprint match ${track_id1} ${track_id2} ${score}`)
 		merge_set(track_id1, track_id2)
 	}
 
