@@ -11,12 +11,6 @@ cmds=(
 
 	# faker
 	"track.new.youtube_video" "among_fake"
-
-	# black is the new black
-	"track.new.spotify_track" "56XcpXmOzxrjk1CNvqH1Av"
-
-	# perpetual
-	"track.new.spotify_track" "1EmbdGpODC0A8TB18vtJRJ"
 )
 
 sh/queue_imm.ts "${cmds[@]}"

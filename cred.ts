@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm"
 import { db } from "./db"
 import { $kv_store } from "./schema"
 import { pass_exception } from "./pass"
-import { SpotifyApi } from "@spotify/web-api-ts-sdk"
+import { AccessToken, SpotifyApi, UserProfile } from "@spotify/web-api-ts-sdk"
 import { nfetch } from "./fetch"
 
 export type CredentialKind = keyof CredentialStore
@@ -70,7 +70,7 @@ export function pass_cred_get<T extends CredentialKind>(kind: T): CredentialStor
 	return datum
 }
 
-let _spotify_api: SpotifyApi;
+let _spotify_api: SpotifyApi
 
 // fuckit
 const scopes = [
@@ -105,6 +105,91 @@ export function pass_spotify_api(): SpotifyApi {
 	})
 
 	return _spotify_api
+}
+
+let _spotify_user: [SpotifyApi, UserProfile]
+
+export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
+	if (_spotify_user) {
+		return _spotify_user
+	}
+
+	const client_redirect_uri = 'http://localhost:8080/callback'
+	const [[client_id, client_secret], ] = pass_cred_get('spotify_api')
+
+	async function spotify_auth_user(): Promise<SpotifyApi> {
+		let sdk: SpotifyApi | undefined
+
+		console.log(`spotify: listening on http://localhost:8080/`)
+		console.log(`spotify: awaiting accept`)
+
+		const server = Bun.serve({
+			port: 8080,
+			async fetch(req) {
+				const url = new URL(req.url)
+				out: switch (url.pathname) {
+					case '/': {
+						const url = 'https://accounts.spotify.com/authorize' +
+							'?response_type=code' +
+							'&client_id=' + encodeURIComponent(client_id) +
+							'&scope=' + encodeURIComponent(scopes.join(' ')) +
+							'&redirect_uri=' + encodeURIComponent(client_redirect_uri)
+
+						return Response.redirect(url, 303)
+					}
+					case '/callback': {
+						const code = url.searchParams.get('code')
+
+						if (!code) {
+							break out
+						}
+
+						const auth = btoa(client_id + ':' + client_secret)
+
+						const auth_url = 'https://accounts.spotify.com/api/token' +
+							'?grant_type=authorization_code' +
+							'&code=' + encodeURIComponent(code) +
+							'&redirect_uri=' + encodeURIComponent(client_redirect_uri)	
+
+						const auth_req = new Request(auth_url, {
+							method: 'POST',
+							headers: {
+								'Authorization': 'Basic ' + auth,
+								'Content-Type': 'application/x-www-form-urlencoded'
+							},
+						})
+
+						const auth_data = await fetch(auth_req)
+
+						if (auth_data.status !== 200) {
+							console.log(auth_data)
+							throw new Error('auth failed')
+						}
+						const auth_json = await auth_data.json()
+
+						sdk = SpotifyApi.withAccessToken(client_id, auth_json as AccessToken)
+
+						return new Response('auth completed, you may close this window now', {status: 200})
+					}
+				}
+				return new Response('Not Found', {status: 404})
+			},
+		})
+
+		while (!sdk) {
+			await new Promise((resolve) => setTimeout(resolve, 1))
+		}
+
+		server.stop(true)
+
+		return sdk
+	}
+
+	const api = await spotify_auth_user()
+	const profile = await api.currentUser.profile()
+
+	_spotify_user = [api, profile]
+	return _spotify_user
 }
 
 export function pass_zotify_credentials(): [string, string] {

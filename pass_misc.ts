@@ -337,7 +337,17 @@ export function ident_cmd_unwrap_new<T extends ArticleKind>(entry: QueueEntry, k
 
 	const target_id = ident_id<KindToId[T]>(target)
 
-	if (Object.keys(data).length > 0) {
+	function has_any_data(data: any): boolean {
+		for (const i in data) {
+			if (data[i] !== undefined && data[i] !== null) {
+				return true
+			}
+		}
+
+		return false
+	}
+	
+	if (has_any_data(data)) {
 		db.insert(pk_table)
 			.values({ ...data, id: target_id })
 			.onConflictDoUpdate({

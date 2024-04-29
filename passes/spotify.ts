@@ -125,8 +125,12 @@ export async function pass_album_new_spotify_album() {
 			locale_insert(name)
 
 			// > The cover art for the album in various sizes, widest first.
+			// TODO: some tracks which are so fucked, you can't include
+			//       but we do anyway. its the users choice at the end of the day
 			const largest = album.images[0]
-			images_queue_url(ident, ImageKind["Cover Art"], largest.url)
+			if (largest) {
+				images_queue_url(ident, ImageKind["Cover Art"], largest.url)
+			}
 
 			insert_canonical($spotify_album, album.id, spotify_id, {
 				album_id,

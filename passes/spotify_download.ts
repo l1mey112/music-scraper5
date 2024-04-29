@@ -8,10 +8,11 @@ import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
 import { sql } from "drizzle-orm"
 
-const has_audio_source = sqlite.prepare<number, [string]>(`
+// if contains no preview, then it's not available
+const can_download_source = sqlite.prepare<number, [string]>(`
 	select 1
 	from spotify_track
-	where id = ? and source is not null
+	where id = ? and source is null and preview_url is not null
 `)
 
 // source.download.from_spotify_track
@@ -29,8 +30,7 @@ export async function pass_source_download_from_spotify_track() {
 		const spotify_id = entry.payload
 		const [ident, track_id] = ident_cmd_unwrap_new(entry, 'track_id')
 
-		const already_has_source = has_audio_source.get(spotify_id)
-		if (already_has_source) {
+		if (!can_download_source.get(spotify_id)) {
 			return
 		}
 
@@ -46,14 +46,19 @@ export async function pass_source_download_from_spotify_track() {
 			// 160kbps (highest for free users)
 			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --root-path ${fs_media_path} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
 			// sometimes zotify doesn't return nonzero exit code on failure
+			const stdout = sh.stdout.toString()
+			if (stdout.includes('SONG IS UNAVAILABLE') || stdout.includes('SKIPPING')) {
+				throw new Error('SONG IS UNAVAILABLE')
+			}
 			if (sh.stderr.length > 0) {
-				throw new Error(new TextDecoder().decode(sh.stderr))
+				throw new Error(sh.stderr.toString())
 			}
 		} catch (e) {
 			console.error('failed to download track', spotify_id)
 			console.error(e)
-			queue_retry_later(entry)
-			return
+			//queue_retry_later(entry)
+			//return
+			throw e
 		}
 
 		const hash = (hash_part + '.ogg') as FSRef

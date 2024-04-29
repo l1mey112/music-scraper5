@@ -25,8 +25,8 @@ export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArt
 		ret = {
 			followers: qnd.stats.followers,
 			monthly_listeners: qnd.stats.monthlyListeners,
-			avatar_extracted_colour_dark: qnd.visuals.avatarImage.extractedColors.colorDark?.hex,
-			avatar_extracted_colour_raw: qnd.visuals.avatarImage.extractedColors.colorRaw?.hex,
+			avatar_extracted_colour_dark: qnd.visuals.avatarImage?.extractedColors.colorDark?.hex,
+			avatar_extracted_colour_raw: qnd.visuals.avatarImage?.extractedColors.colorRaw?.hex,
 			external_links: qnd.profile.externalLinks.items.map(v => v.url),
 			biography: qnd.profile.biography.text,
 			header_images: qnd.visuals.headerImage?.sources ?? [],
@@ -45,7 +45,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 	let updated = false
 	const k = queue_pop<string>('artist.meta.spotify_artist_supplementary')
 
-	await run_with_concurrency_limit(k, 4, async (entry) => {
+	await run_with_concurrency_limit(k, 16, async (entry) => {
 		const spotify_id = entry.payload
 		const data = await spotify_raw_artist(spotify_id)
 		if (!data) {
@@ -125,7 +125,7 @@ interface RawArtistInitialData {
 					monthlyListeners: number
 				}
 				visuals: {
-					avatarImage: {
+					avatarImage?: {
 						extractedColors: {
 							colorDark?: {
 								hex: string
@@ -135,7 +135,7 @@ interface RawArtistInitialData {
 							} | null
 						}
 						sources: SpotifyImage[]
-					}
+					} | null
 					headerImage?: {
 						sources: SpotifyImage[]
 					} | null

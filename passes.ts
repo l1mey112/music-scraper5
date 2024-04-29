@@ -32,5 +32,5 @@ export const passes: PassElement[] = [
 	{ name: 'source.download.from_youtube_video', fn: pass_source_download_from_youtube_video },
 	{ name: 'source.download.from_spotify_track', fn: pass_source_download_from_spotify_track },
 	{ name: 'source.classify.chromaprint', fn: pass_source_classify_chromaprint },
-	{ name: 'track.merge.using_known_heuristics', fn: pass_track_merge_using_known_heuristics },
+	//{ name: 'track.merge.using_known_heuristics', fn: pass_track_merge_using_known_heuristics },
 ]
