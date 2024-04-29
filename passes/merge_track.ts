@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm"
 import { db, sqlite } from "../db"
-import { ident, queue_pop } from "../pass_misc"
+import { ident_make, queue_pop } from "../pass_misc"
 import { $album_track, $external_links, $images, $locale, $source, $spotify_track, $track, $track_artist, $youtube_video } from "../schema"
 import { FSRef, Ident, TrackId } from "../types"
 
@@ -87,23 +87,31 @@ function merge_track(track_id1: TrackId, track_id2: TrackId) {
 		$external_links,
 	]
 
-	const track_id1_ident = ident(track_id1, 'track_id')
-	const track_id2_ident = ident(track_id2, 'track_id')
+	const track_id1_ident = ident_make(track_id1, 'track_id')
+	const track_id2_ident = ident_make(track_id2, 'track_id')
 
 	db.transaction(db => {
 		// merge track_id2 into track_id1
 		for (const table of migration_tables_track_id) {
-			db.update(table)
-				.set({ track_id: track_id1 })
-				.where(sql`track_id = ${track_id2}`)
-				.run()
+			try {
+				db.update(table)
+					.set({ track_id: track_id1 })
+					.where(sql`track_id = ${track_id2}`)
+					.run()
+			} catch {
+				// ignore
+			}
 		}
 
 		for (const table of migration_tables_ident) {
-			db.update(table)
-				.set({ ident: track_id1_ident })
-				.where(sql`ident = ${track_id2_ident}`)
-				.run()
+			try {
+				db.update(table)
+					.set({ ident: track_id1_ident })
+					.where(sql`ident = ${track_id2_ident}`)
+					.run()
+			} catch {
+				// ignore
+			}
 		}
 
 		// perform a merge using two selects, merge object, then delete and update

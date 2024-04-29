@@ -2,6 +2,12 @@ import { nfetch } from "../fetch"
 
 const YT_LEMNOS_URL = 'https://yt.lemnoslife.com'
 
+// check if https://www.youtube.com/shorts/{} redirects
+export async function meta_youtube_video_is_short(video_id: string): Promise<boolean> {
+	const resp = await nfetch(`https://www.youtube.com/shorts/${video_id}`)
+	return resp.redirected
+}
+
 // no batch operation, that is annoying
 // i hate hammering the lemmnos api - it aint right
 export async function meta_youtube_handle_to_id(handle: string): Promise<string | undefined> {
@@ -113,6 +119,7 @@ export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promi
 			}
 			
 			result.push({
+				id: inner.id,
 				about: inner.about,
 				images: inner.snippet,
 			})
@@ -157,6 +164,36 @@ export async function meta_youtube_channel_v3(channel_ids: string[]): Promise<(s
 	}
 
 	return result
+}
+
+export async function meta_youtube_channel_playlist(playlist_id: string): Promise<string[]> {
+	type Resp = {
+		nextPageToken?: string | undefined
+		error: unknown
+		items: {
+			contentDetails: {
+				videoId: string
+			}
+		}[]
+	}
+
+	const ids = []
+
+	let lastresp: Resp | undefined | null
+	do {
+		const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/playlistItems?part=contentDetails&playlistId=${playlist_id}&maxResults=50${lastresp ? `&pageToken=${lastresp.nextPageToken}` : ''}`)
+		lastresp = await resp.json() as Resp
+
+		if (!resp.ok || !lastresp.items || lastresp.error) {
+			console.error(lastresp)
+			console.error(resp.statusText)
+			throw new Error(`youtube playsist req failed`)
+		}
+
+		ids.push(...lastresp.items.map(x => x.contentDetails.videoId))
+	} while (lastresp.nextPageToken)
+
+	return ids
 }
 
 export type YoutubeImage = {
@@ -228,6 +265,7 @@ type YoutubeChannelV3 = {
 }
 
 export type YoutubeChannelLemmnos = {
+	id: string
 	about: {
 		description?: string | undefined
 		details: {

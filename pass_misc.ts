@@ -2,7 +2,7 @@ import { InferInsertModel, sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
 import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_artist, $album_track } from "./schema"
 import { snowflake } from "./ids"
-import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassIdentifier, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
+import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassIdentifier, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId, known_pass_identifiers } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
 
@@ -94,7 +94,7 @@ function queue_identify_exiting_target(cmd: QueueCmd, payload: any): Ident | und
 			.get()
 
 		if (sel) {
-			return ident(sel.target, col)
+			return ident_make(sel.target, col)
 		}
 	}
 }
@@ -129,7 +129,7 @@ export function queue_dispatch_chain_returning(cmd: QueueCmd, payload: any): Ide
 
 		const [_, col] = desc
 
-		target = ident(snowflake(), col)
+		target = ident_make(snowflake(), col)
 	}
 
 	queue_dispatch_immediate(cmd, payload, target)
@@ -141,6 +141,15 @@ function verify_new_target(pass: PassIdentifier) {
 	const comp = pass.split('.')
 
 	assert(comp[1] === 'new', `pass must be a new pass (${pass})`)
+}
+
+export function queue_known_pass(pass: string): pass is PassIdentifier {
+	for (const i of known_pass_identifiers) {
+		if (pass === i) {
+			return true
+		}
+	}
+	return false
 }
 
 // dispatch a command to be executed immediately
@@ -343,7 +352,7 @@ export function ident_cmd_unwrap_new<T extends ArticleKind>(entry: QueueEntry, k
 
 	if (!target) {
 		verify_new_target(entry.cmd)
-		target = ident(snowflake(), kind)
+		target = ident_make(snowflake(), kind)
 	}
 
 	const pk_table = kind_desc[kind]
@@ -375,7 +384,7 @@ export function ident_cmd_unwrap_new<T extends ArticleKind>(entry: QueueEntry, k
 			.run()
 	}
 
-	return [ident(target_id, kind), target_id]
+	return [ident_make(target_id, kind), target_id]
 }
 
 // the API might return a different id (canonical), instead of the id we know (known)
@@ -454,7 +463,7 @@ export function insert_album_track(album_id: AlbumId, track_id: TrackId | TrackI
 		.run()
 }
 
-export function ident(target: Snowflake, kind: ArticleKind): Ident {
+export function ident_make(target: Snowflake, kind: ArticleKind): Ident {
 	let prefix
 
 	switch (kind) {
@@ -538,7 +547,7 @@ export async function run_batched_zip<T, O>(arr: T[], batch_size: number, batch_
 	}
 }
 
-export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, next: (v: T) => Promise<void>) {
+export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrency_limit: number, next: (v: T) => Promise<void>) {
 	const active_promises: Promise<void>[] = []
 
 	for (const item of arr) {

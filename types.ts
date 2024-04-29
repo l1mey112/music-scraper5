@@ -25,19 +25,23 @@ export type ArtistEntry = typeof $artist.$inferInsert
 export type FSRef = NewType<'FSRef', string>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'link' | 'image' | 'source'
-type PassKind = 'new' | 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag' | 'merge'
+type PassKind = 'new' | 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag' | 'merge' | 'index'
 type PassIdentifierTemplate = `${PassField}.${PassKind}.${string}`
 
 type PassIdentifierList = typeof known_pass_identifiers
 export const known_pass_identifiers = [
 	'track.new.youtube_video',
 	'track.new.spotify_track',
+	'track.seed.youtube_playlist',
 
 	'album.new.spotify_album',
 
 	'artist.new.youtube_channel',
 	'artist.new.spotify_artist',
 	'artist.meta.spotify_artist_supplementary',
+	'artist.meta.youtube_channel_aux',
+
+	'artist.index.youtube_channel',
 
 	'link.classify.weak',
 	'link.classify.link_shorteners',
@@ -65,8 +69,8 @@ export type ImageKind = typeof ImageKind[keyof typeof ImageKind]
 export const ImageKind = Object.freeze({
 	['YouTube Thumbnail']: 0,
 	['YouTube Banner']: 1,
-	['YouTube TV Banner']: 2,
-	['YouTube Mobile Banner']: 3,
+	//['YouTube TV Banner']: 2,
+	//['YouTube Mobile Banner']: 3,
 	['Spotify Artist Banner']: 4,
 	['Cover Art']: 5,
 	['Profile Art']: 6,

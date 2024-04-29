@@ -73,6 +73,8 @@ export const $youtube_video = sqliteTable('youtube_video', {
 export const $youtube_channel = sqliteTable('youtube_channel', {
 	id: text('id').primaryKey(),
 	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
+
+	handle: text('handle'), // @channel
 })
 
 // WITHOUT-ROWID: spotify_track

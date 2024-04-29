@@ -1,6 +1,5 @@
 import { pass_spotify_api } from "../cred"
 import { db } from "../db"
-import { locale_current } from "../locale"
 import { ident_cmd_unwrap_new, ident_id, images_queue_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, queue_complete, queue_dispatch_chain_returning, queue_pop, queue_retry_later, run_batched_zip, queue_dispatch_chain_immediate, queue_dispatch_immediate } from "../pass_misc"
 import { ArtistId, ImageKind, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { $spotify_album, $spotify_artist, $spotify_track, $youtube_video } from "../schema"
