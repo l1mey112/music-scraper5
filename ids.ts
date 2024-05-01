@@ -73,39 +73,16 @@ export function snowflake_timestamp(snowflake: Snowflake): Date {
 	return new Date(Number(BigInt(snowflake) >> 5n) + epoch)
 }
 
-/**
- *  The MIT License (MIT)
- *  
- *  Copyright 2017 Andrey Sitnik <andrey@sitnik.ru>
- *  
- *  Permission is hereby granted, free of charge, to any person obtaining a copy of
- *  this software and associated documentation files (the "Software"), to deal in
- *  the Software without restriction, including without limitation the rights to
- *  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- *  the Software, and to permit persons to whom the Software is furnished to do so,
- *  subject to the following conditions:
- *  
- *  The above copyright notice and this permission notice shall be included in all
- *  copies or substantial portions of the Software.
- *  
- *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- *  FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- *  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- *  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- *  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- **/
-// nanoID is a unique string ID generator, taken for use from a MIT licensed source
-// TODO: using a nanoid in a hash shard results in 64**2 possible values, which is 4096 folders
-//       maybe that is too many?
-export function nanoid(size = 18 /* 21 */) {
-	// CHANGE: `=` instead of `-`, the dash causes fuckups when appearing at the start of a CLI arg
-	const alph = "useandom=26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict"
-	const r = crypto.getRandomValues(new Uint8Array(size))
+export function shard_id() {
+	const alph = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_="
+	const r = crypto.getRandomValues(new Uint8Array(20))
 
 	let ac = ""
 
-	for (let n = 0; n < size; n++) {
+	ac += alph[r[0] % 10]
+	ac += alph[r[1] % 10]
+
+	for (let n = 2; n < 18; n++) {
 		ac += alph[63 & r[n]]
 	}
 

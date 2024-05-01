@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, statSync } from "fs"
 import { resolve } from "path"
 import { FSRef } from "./types"
 import { BunFile } from "bun"
-import { nanoid } from "./ids"
+import { shard_id } from "./ids"
 
 if (!process.argv[2]) {
 	console.error("no root directory provided")
@@ -31,7 +31,7 @@ export function fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {
 }
 
 export function fs_sharded_path(dot_ext: string): [string, FSRef] {
-	const hash = (nanoid() + dot_ext) as FSRef
+	const hash = (shard_id() + dot_ext) as FSRef
 	const shard = hash.slice(0, 2)
 
 	// bun automatically creates folders
@@ -41,7 +41,7 @@ export function fs_sharded_path(dot_ext: string): [string, FSRef] {
 // append your own extension
 // creates the shard folder
 export function fs_sharded_path_noext_nonlazy(): [string, string] {
-	const hash = String(nanoid())
+	const hash = String(shard_id())
 	const shard = hash.slice(0, 2)
 
 	mkdirSync(`${fs_root}/${shard}`, { recursive: true })
@@ -50,7 +50,7 @@ export function fs_sharded_path_noext_nonlazy(): [string, string] {
 }
 
 export function fs_sharded_path_nonlazy(dot_ext: string): [string, FSRef] {
-	const hash = (nanoid() + dot_ext) as FSRef
+	const hash = (shard_id() + dot_ext) as FSRef
 	const shard = hash.slice(0, 2)
 
 	mkdirSync(`${fs_root}/${shard}`, { recursive: true })
