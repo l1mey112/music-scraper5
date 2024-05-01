@@ -2,8 +2,9 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import { Database } from 'bun:sqlite'
 import * as schema from './schema'
+import { fs_sqlite } from './fs'
 
-export const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: true })
+export const sqlite: Database = new Database(fs_sqlite, { create: false, readwrite: true })
 
 //sqlite.exec("pragma locking_mode = EXCLUSIVE;") // exclusive locking
 sqlite.exec("pragma journal_mode = WAL;")

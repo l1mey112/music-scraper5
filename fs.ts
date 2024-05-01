@@ -1,24 +1,24 @@
 import { existsSync, mkdirSync, statSync } from "fs"
-import { resolve } from "path"
+import { realpathSync } from "fs"
 import { FSRef } from "./types"
 import { BunFile } from "bun"
 import { shard_id } from "./ids"
 
-if (!process.argv[2]) {
-	console.error("no root directory provided")
-	process.exit(1)
+function assert_directory(path: string, kind: string) {
+	if (!existsSync(path)) {
+		mkdirSync(path)
+	} else if (!statSync(path).isDirectory()) {
+		console.error(`${kind} directory exists but is not a directory (at ${fs_root})`)
+		process.exit(1)
+	}
 }
 
-export const fs_root = resolve(process.argv[2])
+export const fs_root = realpathSync('root')
+export const fs_sqlite = `${fs_root}/db.sqlite`
+export const fs_media = `${fs_root}/media`
 
-console.log(`root directory: ${fs_root}`)
-
-if (!existsSync(fs_root)) {
-	mkdirSync(fs_root)
-} else if (!statSync(fs_root).isDirectory()) {
-	console.error(`root directory exists but is not a directory (at ${fs_root})`)
-	process.exit(1)
-}
+assert_directory(fs_root, "root")
+assert_directory(fs_media, "media")
 
 export function fs_hash_path(hash: FSRef): string {
 	const shard = (hash as unknown as string).slice(0, 2)
