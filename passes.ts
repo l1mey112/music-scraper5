@@ -1,40 +1,85 @@
-import { PassElement } from "./pass"
 import { pass_source_classify_chromaprint } from "./passes/chromaprint"
 import { pass_image_download_image_url } from "./passes/image"
 import { pass_link_classify_link_shorteners, pass_link_classify_weak } from "./passes/link"
-import { pass_link_extrapolate_from_linkcore, pass_link_extrapolate_from_lnk_to } from "./passes/link_distributors"
 import { pass_track_merge_using_known_heuristics } from "./passes/merge_track"
-import { pass_album_new_spotify_album, pass_artist_new_spotify_artist, pass_track_new_spotify_track } from "./passes/spotify"
+import { pass_album_index_spotify_album, pass_artist_index_spotify_artist, pass_aux_assign_album_spotify_artist, pass_aux_assign_album_spotify_track, pass_aux_assign_track_spotify_artist, pass_track_index_spotify_track } from "./passes/spotify"
 import { pass_source_download_from_spotify_track } from "./passes/spotify_download"
-import { pass_artist_meta_spotify_supplementary } from "./passes/spotify_raw"
-import { pass_artist_index_youtube_channel, pass_artist_meta_youtube_channel_aux, pass_artist_new_youtube_channel, pass_track_new_youtube_video, pass_track_seed_youtube_playlist } from "./passes/youtube"
+import { pass_aux_spotify_artist0 } from "./passes/spotify_raw"
+import { pass_aux_assign_track_youtube_channel, pass_aux_youtube_channel0, pass_artist_index_youtube_channel, pass_track_index_youtube_video } from "./passes/youtube"
 import { pass_source_download_from_youtube_video } from "./passes/youtube_download"
+import { KV, MaybePromise, QueueEntry, static_assert, type_extends } from "./types"
 
-export const passes: PassElement[] = [
-	[
-		[
-			[
-				{ name: 'track.seed.youtube_playlist', fn: pass_track_seed_youtube_playlist },
-				{ name: 'track.new.youtube_video', fn: pass_track_new_youtube_video },
-				{ name: 'track.new.spotify_track', fn: pass_track_new_spotify_track },
-			],
-			{ name: 'album.new.spotify_album', fn: pass_album_new_spotify_album },
-		],
-		{ name: 'artist.new.youtube_channel', fn: pass_artist_new_youtube_channel },
-		{ name: 'artist.new.spotify_artist', fn: pass_artist_new_spotify_artist },
-		{ name: 'artist.meta.youtube_channel_aux', fn: pass_artist_meta_youtube_channel_aux },
-		{ name: 'artist.meta.spotify_artist_supplementary', fn: pass_artist_meta_spotify_supplementary },
-		{ name: 'artist.index.youtube_channel', fn: pass_artist_index_youtube_channel },
-		[
-			{ name: 'link.classify.weak', fn: pass_link_classify_weak },
-			//{ name: 'link.classify.link_shorteners', fn: pass_link_classify_link_shorteners },
-			//{ name: 'link.extrapolate.from_linkcore', fn: pass_link_extrapolate_from_linkcore },
-			//{ name: 'link.extrapolate.from_lnk_to', fn: pass_link_extrapolate_from_lnk_to },
-		],
-	],
-	{ name: 'image.download.image_url', fn: pass_image_download_image_url },
-	{ name: 'source.download.from_youtube_video', fn: pass_source_download_from_youtube_video },
-	{ name: 'source.download.from_spotify_track', fn: pass_source_download_from_spotify_track },
-	{ name: 'source.classify.chromaprint', fn: pass_source_classify_chromaprint },
-	{ name: 'track.merge.using_known_heuristics', fn: pass_track_merge_using_known_heuristics },
+export const pass_article_kinds = ['aux', 'track', 'album', 'artist', 'image', 'source', 'link'] as const
+
+// all dispatchable pass article
+export type PassArticle = typeof pass_article_kinds[number]
+export type PassIdentifierTemplate = `${PassArticle}.${string}`
+export type PassIdentifier = PassIdentifierList[number]
+
+export type PassCallback<T = any> = (k: QueueEntry<T>[]) => MaybePromise<void>
+export type PassSettledCallback = () => MaybePromise<void>
+
+type PassIdentifierList = [
+	'track.index_youtube_video',
+	'artist.index_youtube_channel',
+	'aux.assign_track_youtube_channel',
+	'aux.youtube_channel0',
+	'source.download_from_youtube_video',
+	'source.download_from_spotify_track',
+	'source.classify_chromaprint',
+	'image.download_image_url',
+	'aux.assign_track_spotify_artist',
+	'aux.assign_album_spotify_artist',
+	'track.index_spotify_track',
+	'album.index_spotify_album',
+	'artist.index_spotify_artist',
+	'aux.assign_album_spotify_track',
+	'aux.spotify_artist0',
 ]
+
+export type PassIdentifierPayload<T extends PassIdentifier> =
+	(typeof passes_const)[T]['pass'] extends PassCallback<infer U> ? U : never
+
+type _ = static_assert<type_extends<PassIdentifierList, PassIdentifierTemplate[]>>
+
+// TODO: passes should be able to be swapped out and registered.
+//       which means, just declare payload types here globally,
+//       then run a function to register them
+
+const passes_const = {
+	'track.index_youtube_video': { pass: pass_track_index_youtube_video },
+	'artist.index_youtube_channel': { pass: pass_artist_index_youtube_channel },
+	'source.download_from_youtube_video': { pass: pass_source_download_from_youtube_video },
+	'source.classify_chromaprint': { pass: pass_source_classify_chromaprint },
+	'image.download_image_url': { pass: pass_image_download_image_url },
+	'source.download_from_spotify_track': { pass: pass_source_download_from_spotify_track },
+	'track.index_spotify_track': { pass: pass_track_index_spotify_track },
+	'album.index_spotify_album': { pass: pass_album_index_spotify_album },
+	'artist.index_spotify_artist': { pass: pass_artist_index_spotify_artist },
+
+	// aux
+	'aux.assign_track_youtube_channel': { pass: pass_aux_assign_track_youtube_channel, settled: 'artist' },
+	'aux.assign_track_spotify_artist': { pass: pass_aux_assign_track_spotify_artist, settled: 'artist' },
+	'aux.assign_album_spotify_artist': { pass: pass_aux_assign_album_spotify_artist, settled: 'artist' },
+	'aux.assign_album_spotify_track': { pass: pass_aux_assign_album_spotify_track, settled: 'track' },
+	'aux.youtube_channel0': { pass: pass_aux_youtube_channel0 },
+	'aux.spotify_artist0': { pass: pass_aux_spotify_artist0 },
+} as const satisfies Record<PassIdentifier, PassDesc>
+
+type PassSettledDesc = {
+	pass: PassSettledCallback
+	settled?: PassArticle // used with aux, scheduled to run after the all `settled.*` passes
+}
+
+export const passes: Record<PassIdentifier, PassDesc> = passes_const
+
+type PassDesc = {
+	pass: PassCallback
+	settled?: PassArticle // used with aux, scheduled to run after the all `settled.*` passes
+}
+
+export const passes_settled: Record<PassIdentifierTemplate, PassSettledDesc> = {
+	'track.merge_using_known_heuristics': { pass: pass_track_merge_using_known_heuristics },
+	//'link.classify_weak': { pass: pass_link_classify_weak },
+	//'link.classify.link_shorteners': { pass: pass_link_classify_link_shorteners },
+}

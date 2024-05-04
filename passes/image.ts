@@ -2,19 +2,16 @@ import { db } from '../db'
 import { nfetch } from '../fetch'
 import { fs_hash_path, fs_sharded_lazy_bunfile } from '../fs'
 import { mime_ext } from '../mime'
-import { ident_cmd, queue_complete, queue_pop, queue_retry_later, run_with_concurrency_limit } from '../pass_misc'
+import { queue_complete, queue_retry_later } from '../pass'
+import { get_ident, run_with_concurrency_limit } from '../pass_misc'
 import { $images } from '../schema'
-import { ImageKind } from '../types'
+import { Ident, ImageKind, QueueEntry } from '../types'
 import sizeOf from 'image-size'
 
-// image.download.image_url
-export async function pass_image_download_image_url() {
-	let updated = false
-	const k = queue_pop<[ImageKind, string]>('image.download.image_url')
-
-	await run_with_concurrency_limit(k, 32, async (entry) => {
-		const ident = ident_cmd(entry)
-		const [image_kind, url] = entry.payload
+// image.download_image_url
+export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageKind, url: string]>[]) {
+	return run_with_concurrency_limit(entries, 32, async (entry) => {
+		const [ident, image_kind, url] = entry.payload
 
 		const resp = await nfetch(url)
 
@@ -44,9 +41,6 @@ export async function pass_image_download_image_url() {
 				.run()
 
 			queue_complete(entry)
-			updated = true
 		})
 	})
-
-	return updated
 }

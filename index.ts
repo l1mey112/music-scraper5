@@ -1,7 +1,7 @@
 import { db_close } from "./db";
-import { PassMutationFn, PassStateEnum, pass } from "./pass";
+import { pass } from "./pass";
 import { pass_track_new_spotify_index_liked } from "./passes/spotify_liked";
-import './indexes' // seed the queue
+//import './indexes' // seed the queue
 
 function exit() {
 	db_close()
@@ -15,31 +15,26 @@ function exit() {
 process.on("SIGINT", exit)
 process.on("SIGTERM", exit)
 
-let lasttime: number = 0
-
-const cb: PassMutationFn = (state, error) => {
-	if (error) {
-		console.error(`${error.pass ?? 'pass'}: ${error.message}`)
-		if (error.throwable) {
-			throw error.throwable
+for await (const status of pass()) {
+	switch (status.kind) {
+		case 'before': {
+			process.stdout.write(`\r${status.pass}...`)
+			break
 		}
-		return
-	}
-
-	if (state.state == PassStateEnum.BeforeRunning) {
-		lasttime = performance.now()
-	}
-
-	if (state.state == PassStateEnum.FinishedRunning) {
-		// null name means finished group
-		if (state.current_pass_name) {
-			const timems = performance.now() - lasttime
-			console.log(`finished: ${state.current_pass_name} in`, Math.round(timems), 'ms')
+		case 'after': {
+			process.stdout.write(`\r${status.pass}... ${Math.round(status.msec)}ms\n`)
+			break
+		}
+		case 'error': {
+			let msg = status.pass ? `\r${status.pass}: error` : 'error:'
+			console.error(msg, status.error)
+			if (status.throwable) {
+				throw status.throwable
+			}
 		}
 	}
 }
 
 //await pass_track_new_spotify_index_liked()
-await pass(cb)
 
 exit()

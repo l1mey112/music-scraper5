@@ -22,7 +22,7 @@ assert_directory(fs_media, "media")
 
 export function fs_hash_path(hash: FSRef): string {
 	const shard = (hash as unknown as string).slice(0, 2)
-	return `${fs_root}/${shard}/${hash}`
+	return `${fs_media}/${shard}/${hash}`
 }
 
 export function fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {
@@ -35,7 +35,7 @@ export function fs_sharded_path(dot_ext: string): [string, FSRef] {
 	const shard = hash.slice(0, 2)
 
 	// bun automatically creates folders
-	return [`${fs_root}/${shard}/${hash}`, hash]
+	return [`${fs_media}/${shard}/${hash}`, hash]
 }
 
 // append your own extension
@@ -44,17 +44,17 @@ export function fs_sharded_path_noext_nonlazy(): [string, string] {
 	const hash = String(shard_id())
 	const shard = hash.slice(0, 2)
 
-	mkdirSync(`${fs_root}/${shard}`, { recursive: true })
+	mkdirSync(`${fs_media}/${shard}`, { recursive: true })
 
-	return [`${fs_root}/${shard}/${hash}`, hash]
+	return [`${fs_media}/${shard}/${hash}`, hash]
 }
 
 export function fs_sharded_path_nonlazy(dot_ext: string): [string, FSRef] {
 	const hash = (shard_id() + dot_ext) as FSRef
 	const shard = hash.slice(0, 2)
 
-	mkdirSync(`${fs_root}/${shard}`, { recursive: true })
+	mkdirSync(`${fs_media}/${shard}`, { recursive: true })
 
 	// bun automatically creates folders
-	return [`${fs_root}/${shard}/${hash}`, hash]
+	return [`${fs_media}/${shard}/${hash}`, hash]
 }

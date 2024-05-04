@@ -1,5 +1,8 @@
-import { MaybePromise, PassIdentifier } from "./types"
-import { passes } from "./passes"
+import { MaybePromise, PassHashed, QueueEntry, QueueId } from "./types"
+import { PassArticle, PassIdentifier, PassIdentifierPayload, PassIdentifierTemplate, pass_article_kinds, passes, passes_settled } from "./passes"
+import { db } from "./db"
+import { $queue } from "./schema"
+import { sql } from "drizzle-orm"
 
 class PassStopException extends Error {
 	constructor(message: string) {
@@ -7,259 +10,192 @@ class PassStopException extends Error {
 	}
 }
 
+function pass_hash(pass: PassIdentifier): PassHashed {
+	const [article, name] = pass.split('.')
+	const idx = pass_article_kinds.indexOf(article as PassArticle)
+
+	// 53 bits to work with, just use 32 + 8
+
+	// : 32
+	const low_bits = BigInt(Bun.hash.cityHash32(name))
+
+	// : 8
+	const high_bits = BigInt(idx) << 32n
+
+	// : 40
+	const combined = Number(low_bits | high_bits)
+
+	return combined as PassHashed
+}
+
+// return upper and lower inclusive bounds
+function pass_bound(article: PassArticle): [number, number] {
+	const idx = pass_article_kinds.indexOf(article)
+
+	const low = BigInt(idx) << 32n
+
+	// 0xFFFFFFFF
+	const high = BigInt(low) | 0xFFFFFFFFn
+
+	return [Number(low), Number(high)]
+}
+
 const TRIP_COUNT_MAX = 20
 
-type PassState = {
-	state: PassStateEnum
-	single_step: boolean
-	current_pass: PassGroupState
-	current_pass_name: string | null
-	parent_pass: PassGroupState
-}
-
-type PassGroupState = {
-	parent?: PassGroupState | undefined
-	idx: number
-	breakpoints: Set<number>
-	mutations: Set<number>
-	trip_count: number
-	blocks: PassElementState[]
-}
-
-type PassElementState = PassGroupState | PassBlock
-
-function walk_passes(blocks: PassElement[], parent?: PassGroupState): PassGroupState {
-	const state: PassGroupState = {
-		idx: 0,
-		breakpoints: new Set(),
-		mutations: new Set(),
-		trip_count: 0,
-		parent,
-		blocks: [],
-	}
-
-	for (const block of blocks) {
-		if (block instanceof Array) {
-			state.blocks.push(walk_passes(block, state))
-		} else {
-			state.blocks.push(block)
-		}
-	}
-
-	return state
-}
-
-type PassBlock = {
-	name: PassIdentifier // split('.', 3)
-	fn: () => MaybePromise<boolean | void>
-}
-
-export type PassElement = PassElement[] | PassBlock
-
 type PassError = {
-	pass?: PassIdentifier,
-	message: string
+	kind: 'error'
+	pass?: string
+	error: string
 	throwable?: any
 }
 
-export enum PassStateEnum {
-	BeforeRunning,
-	FinishedRunning,
-	PendingStop,
-	Stopped,
-	Finished,
+type PassBefore = {
+	kind: 'before'
+	pass: string
 }
 
-let pass_state: PassState = {
-	state: PassStateEnum.Stopped,
-	single_step: false,
-	current_pass: walk_passes(passes),
-	current_pass_name: null,
-	parent_pass: undefined as any
+type PassAfter = {
+	kind: 'after'
+	pass: string
+	msec: number
 }
 
-pass_state.parent_pass = pass_state.current_pass
+export const HOUR = 1000 * 60 * 60
+export const DAY = HOUR * 24
 
-// Running, Finished -> ReadyNext
-//
-// ReadyNext -> Running -> ReadyNext (run pass)
-//                state := idx++
-//
-// ReadyNext (single_step) -> Stopped
-// ReadyNext (breakpoint on idx) -> Stopped
-//
-// Running (user action) -> PendingStop
-// PendingStop, ReadyNext -> Stopped
-//
-// ReadyNext, Stopped (end + !mutation) -> Finished
-//
-// Stopped, Finished -> ReadyNext (run button)
+export function queue_dispatch_immediate<T extends PassIdentifier>(pass: T, payload: PassIdentifierPayload<T>) {
+	db.insert($queue)
+		.values({
+			pass: pass_hash(pass),
+			payload,
+		})
+		.run()
+}
 
-// AfterRunning -> ReadyNext -> Running
+export function queue_retry_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
+	db.update($queue)
+		.set({ expiry: Date.now() + expiry_after_millis, try_count: sql`${$queue.try_count} + 1` })
+		.where(sql`id = ${entry.id}`)
+		.run()
+}
 
-let inside_pass_job = false
+export function queue_complete(entry: QueueEntry) {
+	db.delete($queue)
+		.where(sql`id = ${entry.id}`)
+		.run()
+}
 
-// this isn't a very good state machine
-async function state_machine(): Promise<PassError | undefined> {
-	// default state should be Running
+export function queue_known_pass(pass: string): pass is PassIdentifier {
+	return pass in passes
+}
 
-	switch (pass_state.state) {
-		case PassStateEnum.PendingStop:
-		case PassStateEnum.Finished:
-		case PassStateEnum.Stopped:
-		case PassStateEnum.FinishedRunning: {
-			pass_state.current_pass_name = null // unset name
-			
-			if (pass_state.current_pass.idx >= pass_state.current_pass.blocks.length) {
-				pass_state.current_pass.idx = 0
+export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError> {
+	let changed
+	let trip_count = 0
 
-				if (pass_state.current_pass.mutations.size == 0) {
-					pass_state.current_pass.trip_count = 0
-
-					if (pass_state.current_pass.parent) {
-						pass_state.current_pass = pass_state.current_pass.parent
-						pass_state.current_pass.idx++
-						// needs to check for breakpoints, will come back here
-						if (pass_state.state != PassStateEnum.PendingStop) {
-							pass_state.state = PassStateEnum.FinishedRunning
-						}
-						return
-					} else {
-						pass_state.state = PassStateEnum.Finished
-					}
-					return
-				}
-
-				pass_state.current_pass.trip_count++
-
-				if (pass_state.current_pass.trip_count >= TRIP_COUNT_MAX) {
-					pass_state.state = PassStateEnum.Finished
-					pass_state.current_pass.trip_count = 0
-					return {
-						message: `forward progress trip count exceeded max of ${TRIP_COUNT_MAX}`
-					}
-				}
-			}
-
-			if (pass_state.current_pass.idx == 0) {
-				pass_state.current_pass.mutations.clear()
-			}
-
-			// recursively enter the next pass
-			// skip over empty pass groups
-			// TODO: this still doesn't work
-			//       will show again if you have [[],] of passes
-			let pass
-			do {
-				pass = pass_state.current_pass.blocks[pass_state.current_pass.idx]
-				/* if (!pass) {
-					break
-				} */
-				if ('blocks' in pass) {
-					/* if (pass.blocks.length === 0) {
-						pass_state.current_pass.idx++
-						continue
-					} */
-					pass_state.current_pass = pass
-				}
-			} while ('blocks' in pass)
-
-			if (pass_state.state == PassStateEnum.PendingStop) {
-				pass_state.state = PassStateEnum.Stopped
-				return
-			}
-
-			// single step or breakpoint
-			if (pass_state.state != PassStateEnum.Finished && pass_state.state != PassStateEnum.Stopped) {
-				if (pass_state.single_step || pass_state.current_pass.breakpoints.has(pass_state.current_pass.idx)) {
-					pass_state.state = PassStateEnum.Stopped
-					return
-				}
-			}
-			pass_state.state = PassStateEnum.BeforeRunning
-			break
+	function try_catch(e: any): PassError {
+		let error = 'exception thrown'
+		let throwable = e
+		if (e instanceof PassStopException) {
+			error = `${e.message} (stop)`
+			throwable = undefined
 		}
-		case PassStateEnum.BeforeRunning: {
-			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx] as PassBlock
-			pass_state.current_pass_name = pass.name // set name
-
-			try {
-				if (await pass.fn()) {
-					pass_state.current_pass.mutations.add(pass_state.current_pass.idx)
-				}
-			} catch (e) {
-				pass_state.state = PassStateEnum.Stopped
-				let message = `exception thrown`
-				let throwable = e
-				if (e instanceof PassStopException) {
-					message = `exception thrown: ${e.message}`
-					throwable = undefined
-				}
-				return {
-					pass: pass.name,
-					message,
-					throwable,
-				}
-			}
-
-			pass_state.current_pass.idx++
-
-			// typescript narrowing has no idea about other functions and their side effects
-			if ((pass_state.state as PassStateEnum) != PassStateEnum.PendingStop) {
-				pass_state.state = PassStateEnum.FinishedRunning
-			}
-			break
+		return {
+			kind: 'error',
+			pass: pass.name,
+			throwable,
+			error,
 		}
 	}
-}
 
-function pass_walk_reset(state: PassGroupState) {
-	state.idx = 0
-	state.mutations.clear()
-	for (const block of state.blocks) {
-		if ('blocks' in block) {
-			pass_walk_reset(block)
-		}
+	function has_settled(article: PassArticle): boolean {
+		const [low, high] = pass_bound(article)
+
+		const k = db.select({ chk: sql<number>`1` })
+			.from($queue)
+			.where(sql`expiry < ${Date.now()} and pass between ${low} and ${high}`)
+			.get()
+
+		return !k
 	}
-}
-
-export type PassMutationFn = (state: PassState, error?: PassError) => MaybePromise<void>
-
-export async function pass(mutation: PassMutationFn) {
-	if (pass_state.state == PassStateEnum.BeforeRunning) {
-		return
-	}
-
-	if (inside_pass_job) {
-		return
-	}
-
-	if (pass_state.state == PassStateEnum.Finished) {
-		pass_state.current_pass = pass_state.parent_pass
-		pass_walk_reset(pass_state.current_pass)
-	}
-
-	inside_pass_job = true
 
 	do {
-		const error = await state_machine()
-		await mutation(pass_state, error)
-	} while ((pass_state.state as PassStateEnum) != PassStateEnum.Finished && (pass_state.state as PassStateEnum) != PassStateEnum.Stopped)
+		changed = false
 
-	inside_pass_job = false
+		for (const [_name, { pass: fn, settled }] of Object.entries(passes)) {
+			if (!settled || has_settled(settled)) {
+				const name = _name as PassIdentifier
+
+				const k = db.select()
+					.from($queue)
+					.where(sql`expiry <= ${Date.now()} and pass = ${pass_hash(name)}`)
+					.orderBy(sql`id asc`)
+					.all()
+
+				if (k.length > 0) {
+					const converted = k.map<QueueEntry>(it => {
+						const entry = {
+							...it,
+							pass: name,
+						}
+
+						return entry
+					})
+					
+					yield {
+						kind: 'before',
+						pass: name,
+					}
+					const now = performance.now()
+					try {
+						await fn(converted)
+					} catch (e) {
+						yield try_catch(e)
+						return
+					}	
+					yield {
+						kind: 'after',
+						pass: name,
+						msec: performance.now() - now,
+					}
+					changed = true
+				}
+			}
+		}
+
+		for (const [name, { pass: fn, settled }] of Object.entries(passes_settled)) {
+			if (!settled || has_settled(settled)) {
+				yield {
+					kind: 'before',
+					pass: name,
+				}
+				const now = performance.now()
+				try {
+					await fn()
+				} catch (e) {
+					yield try_catch(e)
+					return
+				}	
+				yield {
+					kind: 'after',
+					pass: name,
+					msec: performance.now() - now,
+				}
+			}
+		}
+
+		trip_count++
+		if (trip_count > TRIP_COUNT_MAX) {
+			yield {
+				kind: 'error',
+				error: 'trip count exceeded',
+			}
+			return
+		}
+	} while (changed)
 }
 
 // must be called inside a pass, throws an exception
 export function pass_exception(message: string): never {
 	throw new PassStopException(message)
-}
-
-export function pass_state_tostring(v: PassStateEnum) {
-	switch (v) {
-		case PassStateEnum.BeforeRunning: return 'Running'
-		case PassStateEnum.FinishedRunning: return 'ReadyNext'
-		case PassStateEnum.PendingStop: return 'PendingStop'
-		case PassStateEnum.Stopped: return 'Stopped'
-		case PassStateEnum.Finished: return 'Finished'
-	}
 }

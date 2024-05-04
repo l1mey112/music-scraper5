@@ -1,14 +1,17 @@
-import { InferInsertModel, sql } from "drizzle-orm"
+import { InferInsertModel, SQL, sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
 import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_artist, $album_track } from "./schema"
 import { snowflake } from "./ids"
-import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassIdentifier, QueueCmd, QueueCmdHashed, QueueEntry, Snowflake, TrackEntry, TrackId, known_pass_identifiers } from "./types"
+import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
+import { queue_dispatch_immediate } from "./pass"
+
+
 
 // QUERY PLAN
 // `--SEARCH queue USING INDEX queue.idx0 (expiry<?)
-const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmdHashed]>(`
+/* const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmdHashed]>(`
 	select rowid, target, payload from queue
 	where expiry < ? and cmd = ?
 	order by expiry asc
@@ -27,11 +30,11 @@ export function queue_pop<T = unknown>(cmd: QueueCmd): QueueEntry<T>[] {
 	})
 
 	return nentries
-}
+} */
 
 // mutate the existing queue entry to retry later
 // increments `retry_count` which can be used to determine if the entry should be removed after manual review
-export function queue_retry_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
+/* export function queue_retry_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
 	db.update($queue)
 		.set({ expiry: Date.now() + expiry_after_millis, try_count: sql`${$queue.try_count} + 1` })
 		.where(sql`rowid = ${entry.rowid}`)
@@ -55,8 +58,8 @@ export function queue_complete(entry: QueueEntry) {
 }
 
 // just use cityhash32, its good enough
-function queue_hash_cmd(cmd: QueueCmd): QueueCmdHashed {
-	return Bun.hash.cityHash32(cmd) as QueueCmdHashed
+function queue_hash_cmd(cmd: QueueCmd): PassHashed {
+	return Bun.hash.cityHash32(cmd) as PassHashed
 }
 
 type ArticleKind = 'track_id' | 'album_id' | 'artist_id'
@@ -184,7 +187,7 @@ export function queue_dispatch_chain_immediate(cmd: QueueCmd, payload: any, targ
 	db.insert($queue)
 		.values({ cmd: queue_hash_cmd(cmd), target, payload })
 		.onConflictDoUpdate({
-			target: [$queue.target, $queue.cmd, $queue.payload],
+			target: [$queue.target, $queue.pass, $queue.payload],
 			set: {
 				expiry: 0,
 				try_count: 0,
@@ -204,7 +207,7 @@ export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: I
 	db.insert($queue)
 		.values({ cmd: queue_hash_cmd(cmd), target, payload })
 		.onConflictDoUpdate({
-			target: [$queue.target, $queue.cmd, $queue.payload],
+			target: [$queue.target, $queue.pass, $queue.payload],
 			set: {
 				expiry: 0,
 				try_count: 0,
@@ -218,17 +221,106 @@ export function queue_dispatch_later(cmd: QueueCmd, payload: any, target: Ident,
 	db.insert($queue)
 		.values({ cmd: queue_hash_cmd(cmd), target, payload, expiry: Date.now() + expiry_after_millis })
 		.onConflictDoUpdate({
-			target: [$queue.target, $queue.cmd, $queue.payload],
+			target: [$queue.target, $queue.pass, $queue.payload],
 			set: {
 				expiry: Date.now() + expiry_after_millis,
 				try_count: 0,
 			}
 		})
 		.run()
+} */
+
+export function if_not_exists<T>(table: SQLiteTable, cond: SQL) {
+	return db.select({ _: sql`1` })
+		.from(table)
+		.where(cond)
+		.get() === undefined
 }
 
-export const HOUR = 1000 * 60 * 60
-export const DAY = HOUR * 24
+function has_any_data(data: any): boolean {
+	if (typeof data !== 'object') {
+		return false
+	}
+	
+	for (const i in data) {
+		if (data[i] !== undefined && data[i] !== null) {
+			return true
+		}
+	}
+
+	return false
+}
+
+type ArticleKind = 'track_id' | 'album_id' | 'artist_id'
+
+type KindToId = {
+	track_id: TrackId
+	album_id: AlbumId
+	artist_id: ArtistId
+}
+
+type KindToEntry = {
+	track_id: TrackEntry
+	album_id: AlbumEntry
+	artist_id: ArtistEntry
+}
+
+const kind_desc: Record<ArticleKind, SQLiteTable> = {
+	track_id: $track,
+	album_id: $album,
+	artist_id: $artist,
+}
+
+export function get_ident_or_new<T extends ArticleKind>(foreign_id: string, foreign_table: SQLiteTable, kind: T, aux?: Omit<KindToEntry[T], 'id'>): [Ident, KindToId[T]] {
+	let data: [Ident, KindToId[T]] | undefined
+
+	const a = db.select({ id: sql<KindToId[T]>`${sql.identifier(kind)}` })
+		.from(foreign_table)
+		.where(sql`id = ${foreign_id}`)
+		.get()
+
+	if (a) {
+		data = [ident_make(a.id, kind), a.id]
+	}
+
+	if (!data) {
+		const id = snowflake() as KindToId[T]
+		data = [ident_make(id, kind), id]
+	}
+
+	const pk_table = kind_desc[kind]
+
+	const naux = (aux ?? {}) as KindToEntry[T]
+
+	if (has_any_data(aux)) {
+		db.insert(pk_table)
+			.values({ ...naux, id: data[1] })
+			.onConflictDoUpdate({
+				target: sql`${pk_table}."id"`,
+				set: naux,
+			})
+			.run()
+	} else {
+		db.insert(pk_table)
+			.values({ ...{} as KindToEntry[T], id: data[1] })
+			.onConflictDoNothing()
+			.run()
+	}
+
+	return data
+}
+
+// throws if not exists
+export function get_ident<T extends ArticleKind>(foreign_id: string, foreign_table: SQLiteTable, kind: T): [Ident, KindToId[T]] {
+	const a = db.select({ id: sql<KindToId[T]>`${sql.identifier(kind)}` })
+		.from(foreign_table)
+		.where(sql`id = ${foreign_id}`)
+		.get()
+
+	assert(a, `foreign key not found (${foreign_id})`)
+
+	return [ident_make(a.id, kind), a.id]
+}
 
 export function link_insert(link: LinkEntry | LinkEntry[]) {
 	if (link instanceof Array) {		
@@ -314,77 +406,6 @@ export function locale_insert(locales: LocaleEntry | LocaleEntry[]) {
 			}
 		})
 		.run()
-}
-
-type KindToId = {
-	track_id: TrackId
-	album_id: AlbumId
-	artist_id: ArtistId
-}
-
-type KindToEntry = {
-	track_id: TrackEntry
-	album_id: AlbumEntry
-	artist_id: ArtistEntry
-}
-
-export function ident_cmd(entry: QueueEntry): Ident {
-	assert(entry.target)
-	return entry.target
-}
-
-// ensures existence of the id in the table as well
-// will create in table if doesn't exist
-// will set data as well
-// only really applicable for commands that create new entries, as it is used to overwrite the article entry with `data`
-export function ident_cmd_unwrap_new<T extends ArticleKind>(entry: QueueEntry, kind: T, _data?: Omit<KindToEntry[T], 'id'>): [Ident, KindToId[T]] {
-
-	// identify target
-	// 1. if the queue entry has a target, use that
-	//    it will either not exist, or already exist
-	// 2. nothing found that already exists, just autogenerate and create
-
-	// identifying if the source id already exists then extracting the target ident
-	// is already performed in `queue_identify_exiting_target`
-
-	const data: KindToEntry[T] = _data ?? {}
-	let target = entry.target
-
-	if (!target) {
-		verify_new_target(entry.cmd)
-		target = ident_make(snowflake(), kind)
-	}
-
-	const pk_table = kind_desc[kind]
-
-	const target_id = ident_id<KindToId[T]>(target)
-
-	function has_any_data(data: any): boolean {
-		for (const i in data) {
-			if (data[i] !== undefined && data[i] !== null) {
-				return true
-			}
-		}
-
-		return false
-	}
-	
-	if (has_any_data(data)) {
-		db.insert(pk_table)
-			.values({ ...data, id: target_id })
-			.onConflictDoUpdate({
-				target: sql`${pk_table}."id"`,
-				set: data
-			})
-			.run()
-	} else {
-		db.insert(pk_table)
-			.values({ ...{} as KindToEntry[T], id: target_id })
-			.onConflictDoNothing()
-			.run()
-	}
-
-	return [ident_make(target_id, kind), target_id]
 }
 
 // the API might return a different id (canonical), instead of the id we know (known)
@@ -487,8 +508,8 @@ export function ident_id<T extends TrackId | AlbumId | ArtistId>(id: Ident): T {
 
 // inserts [ImageKind, string] into the queue
 // it is in an array/tuple for deterministic JSON.stringify etc
-export function images_queue_url(ident: Ident, kind: ImageKind, url: string) {
-	queue_dispatch_immediate('image.download.image_url', [kind, url], ident)
+export function image_queue_url(ident: Ident, kind: ImageKind, url: string) {
+	queue_dispatch_immediate('image.download_image_url', [ident, kind, url])
 }
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）

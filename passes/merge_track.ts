@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm"
 import { db, sqlite } from "../db"
-import { ident_make, queue_pop } from "../pass_misc"
+import { ident_make } from "../pass_misc"
 import { $album_track, $external_links, $images, $locale, $source, $spotify_track, $track, $track_artist, $youtube_video } from "../schema"
 import { FSRef, Ident, TrackId } from "../types"
 
@@ -158,11 +158,8 @@ function merge_track(track_id1: TrackId, track_id2: TrackId) {
 	console.log(`merged track ${track_id1_ident} into ${track_id2_ident}`)
 }
 
-// track.merge.using_known_heuristics
+// track.merge_using_known_heuristics
 export function pass_track_merge_using_known_heuristics() {
-	let updated = false
-	const k = queue_pop<FSRef>('track.merge.using_known_heuristics')
-
 	// this is expensive to run, bisecting it into smaller chunks is a good idea
 	// 1. link all tracks together with same ISRC
 	// 2. link all tracks together with same chromaprint

@@ -1,23 +1,16 @@
 import { $ } from "bun"
-import { ident_cmd_unwrap_new, queue_complete, queue_pop, run_with_concurrency_limit } from "../pass_misc"
-import { FSRef } from "../types"
+import { FSRef, QueueEntry } from "../types"
 import { fs_hash_path } from "../fs"
 import { db } from "../db"
 import { $source } from "../schema"
 import { sql } from "drizzle-orm"
+import { run_with_concurrency_limit } from "../pass_misc"
+import { queue_complete } from "../pass"
 
-// source.classify.chromaprint
-export async function pass_source_classify_chromaprint() {
-	let updated = false
-	const k = queue_pop<FSRef>('source.classify.chromaprint')
-
-	if (k.length === 0) {
-		return
-	}
-
-	await run_with_concurrency_limit(k, 20, async (entry) => {
+// source.classify_chromaprint
+export function pass_source_classify_chromaprint(entries: QueueEntry<FSRef>[]) {
+	return run_with_concurrency_limit(entries, 20, async (entry) => {
 		const hash = entry.payload
-		// const [ident, track_id] = ident_cmd_unwrap_new(entry, 'track_id')
 
 		// defualt length is 120 seconds, 180 is fine
 		const fpcalc = await $`fpcalc -algorithm 2 -length 180 -raw -json ${fs_hash_path(hash)}`.quiet()
@@ -52,6 +45,5 @@ export async function pass_source_classify_chromaprint() {
 
 			queue_complete(entry)
 		})
-		updated = true
 	})
 }

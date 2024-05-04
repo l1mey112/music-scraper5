@@ -8,7 +8,7 @@ if [ -f "root/db.sqlite" ]; then
 fi
 
 # -f to avoid error if enoent
-rm -rf migrations
+rm -rf migrations root/media
 rm -f root/db.sqlite root/db.sqlite-shm root/db.sqlite-wal
 
 bun run drizzle-kit generate:sqlite

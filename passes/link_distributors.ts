@@ -2,6 +2,9 @@ import { db } from "../db"
 import { link_delete, link_insert, link_kill, link_select, link_urls_unknown, run_with_concurrency_limit } from "../pass_misc"
 import { Link, LinkEntry } from "../types"
 
+// TODO: unused for now, need to be updated
+//       make these return boolean as normal
+
 // link.extrapolate.from_linkcore
 export async function pass_link_extrapolate_from_linkcore() {
 	let updated = false

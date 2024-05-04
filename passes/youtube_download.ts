@@ -1,10 +1,11 @@
 import * as YTDlpWrap from "yt-dlp-wrap"
 import { db, sqlite } from "../db"
-import { ident_cmd_unwrap_new, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, run_with_concurrency_limit } from "../pass_misc"
 import { fs_sharded_path_noext_nonlazy } from "../fs"
-import { FSRef } from "../types"
+import { FSRef, QueueEntry } from "../types"
 import { $source, $youtube_video } from "../schema"
 import { sql } from "drizzle-orm"
+import { get_ident, run_with_concurrency_limit } from "../pass_misc"
+import { queue_complete, queue_dispatch_immediate, queue_retry_later } from "../pass"
 
 const has_video_source = sqlite.prepare<number, [string]>(`
 	select 1
@@ -12,22 +13,13 @@ const has_video_source = sqlite.prepare<number, [string]>(`
 	where id = ? and source is not null
 `)
 
-// source.download.from_youtube_video
-export async function pass_source_download_from_youtube_video() {
-	// use a queue command to allow for easy retrying
-	// without this, we'd have to use seperate heuristics to determine failed entries
-	let updated = false
-	const k = queue_pop<string>('source.download.from_youtube_video')
-
-	if (k.length === 0) {
-		return
-	}
-	
+// source.download_from_youtube_video
+export function pass_source_download_from_youtube_video(entries: QueueEntry<string>[]) {
 	const ytdl = new YTDlpWrap.default()
 
-	await run_with_concurrency_limit(k, 20, async (entry) => {
+	return run_with_concurrency_limit(entries, 20, async (entry) => {
 		const youtube_id = entry.payload
-		const [ident, track_id] = ident_cmd_unwrap_new(entry, 'track_id')
+		const [_, track_id] = get_ident(youtube_id, $youtube_video, 'track_id')
 
 		const already_has_source = has_video_source.get(youtube_id)
 		if (already_has_source) {
@@ -79,11 +71,8 @@ export async function pass_source_download_from_youtube_video() {
 				.where(sql`id = ${youtube_id}`)
 				.run()
 
-			queue_dispatch_immediate('source.classify.chromaprint', hash, ident) // ident is ignored
+			queue_dispatch_immediate('source.classify_chromaprint', hash) // ident is ignored
 			queue_complete(entry)
 		})
-		updated = true
 	})
-
-	return updated
 }

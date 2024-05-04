@@ -1,12 +1,12 @@
 import { $ } from "bun"
 import { pass_zotify_credentials } from "../cred"
 import { fs_media, fs_sharded_path_noext_nonlazy } from "../fs"
-import { ident_cmd_unwrap_new, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, run_with_concurrency_limit } from "../pass_misc"
-import { dirname, basename } from 'path'
-import { FSRef } from "../types"
+import { FSRef, QueueEntry } from "../types"
 import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
 import { sql } from "drizzle-orm"
+import { get_ident, run_with_concurrency_limit } from "../pass_misc"
+import { queue_complete, queue_dispatch_immediate } from "../pass"
 
 // if contains no preview, then it's not available
 const can_download_source = sqlite.prepare<number, [string]>(`
@@ -15,20 +15,13 @@ const can_download_source = sqlite.prepare<number, [string]>(`
 	where id = ? and source is null and preview_url is not null
 `)
 
-// source.download.from_spotify_track
-export async function pass_source_download_from_spotify_track() {
-	let updated = false
-	const k = queue_pop<string>('source.download.from_spotify_track')
-
-	if (k.length === 0) {
-		return
-	}
-
+// source.download_from_spotify_track
+export function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
 	const [username, password] = pass_zotify_credentials()
 
-	await run_with_concurrency_limit(k, 20, async (entry) => {
+	return run_with_concurrency_limit(entries, 20, async (entry) => {
 		const spotify_id = entry.payload
-		const [ident, track_id] = ident_cmd_unwrap_new(entry, 'track_id')
+		const [_, track_id] = get_ident(spotify_id, $spotify_track, 'track_id')
 
 		if (!can_download_source.get(spotify_id)) {
 			return
@@ -76,12 +69,9 @@ export async function pass_source_download_from_spotify_track() {
 				.set({ source: hash })
 				.where(sql`id = ${spotify_id}`)
 				.run()
-				
-			queue_dispatch_immediate('source.classify.chromaprint', hash, ident) // ident is ignored
+
+			queue_dispatch_immediate('source.classify_chromaprint', hash)
 			queue_complete(entry)
 		})
-		updated = true
 	})
-
-	return updated
 }

@@ -1,5 +1,5 @@
 import { blob, index, integer, real, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, QueueCmdHashed, TrackId } from "./types";
+import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, PassHashed, QueueId, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
 	id: integer('id').$type<TrackId>().primaryKey(),
@@ -127,15 +127,15 @@ export const $locale = sqliteTable('locale', {
 
 // FIFO queue, 0 expiry means immediate. use `order by expiry asc`
 export const $queue = sqliteTable('queue', {
-	target: text('target').default('').$type<Ident>().notNull(), // FK decided by `pk_ident`, '' means create a new target
-	cmd: integer('cmd').$type<QueueCmdHashed>().notNull(),
+	id: integer('id').$type<QueueId>().primaryKey({ autoIncrement: true }), // stable rowid
+	pass: integer('pass').$type<PassHashed>().notNull(),
 	payload: text('payload', { mode: "json" }).notNull(), // data decided by the work cmd
 
 	expiry: integer('expiry').default(0).notNull(), // unix millis, zero for immediate
 	try_count: integer('try_count').default(0).notNull(), // amount of tries thus far
 }, (t) => ({
-	idx0: index('queue.idx0').on(t.expiry, t.cmd),
-	uniq: unique('queue.uniq').on(t.target, t.cmd, t.payload), // unique for removing duplicates
+	idx0: index('queue.idx0').on(t.expiry, t.pass),
+	//uniq: unique('queue.uniq').on(t.target, t.cmd, t.payload), // unique for removing duplicates
 }))
 
 // WITHOUT-ROWID: images

@@ -145,8 +145,6 @@ function link_classify<T extends keyof any>(url: string, classify_links: Record<
 
 // link.classify.weak
 export function pass_link_classify_weak() {
-	let updated = false
-
 	const k = link_select()
 
 	for (const link of k) {
@@ -169,11 +167,7 @@ export function pass_link_classify_weak() {
 			link.data = classified.data
 			link_insert(link)
 		})
-
-		updated = true
 	}
-
-	return updated
 }
 
 // https://gist.github.com/HoangTuan110/e6eb412ed32657c841fcc2c12c156f9d
@@ -191,14 +185,13 @@ const link_shorteners_classify: Record<string, LinkMatch[]> = {
 }
 
 // link.classify.link_shorteners
-export async function pass_link_classify_link_shorteners() {
-	let updated = false
+export function pass_link_classify_link_shorteners() {
 	let k = link_select()
 
 	// match only the ones that are in the list
 	k = k.filter(({ data }) => link_classify(data, link_shorteners_classify))
 
-	await run_with_concurrency_limit(k, 16, async (link) => {
+	return run_with_concurrency_limit(k, 16, async (link) => {
 		const req = await fetch(link.data)
 
 		// even if it passes through the shortener
@@ -220,8 +213,5 @@ export async function pass_link_classify_link_shorteners() {
 			link_insert(link)
 			console.log('successful', link)
 		})
-		updated = true
 	})
-
-	return updated
 }

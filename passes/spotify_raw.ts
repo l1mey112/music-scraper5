@@ -3,8 +3,10 @@
 
 import { db } from "../db"
 import { nfetch } from "../fetch"
-import { ident_cmd_unwrap_new, images_queue_url, link_insert, link_urls_unknown, links_from_text, locale_insert, queue_complete, queue_pop, run_with_concurrency_limit } from "../pass_misc"
-import { ImageKind, Link, LinkEntry, LocaleDesc, LocaleEntry } from "../types"
+import { queue_complete } from "../pass"
+import { get_ident, image_queue_url, link_insert, link_urls_unknown, links_from_text, locale_insert, run_with_concurrency_limit } from "../pass_misc"
+import { $spotify_artist } from "../schema"
+import { ImageKind, Link, LinkEntry, LocaleDesc, LocaleEntry, QueueEntry } from "../types"
 
 export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArtistInitialData | undefined> {	
 	const url = `https://open.spotify.com/artist/${spotify_id}`
@@ -40,12 +42,9 @@ export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArt
 	return ret
 }
 
-// artist.meta.spotify_artist_supplementary
-export async function pass_artist_meta_spotify_supplementary() {
-	let updated = false
-	const k = queue_pop<string>('artist.meta.spotify_artist_supplementary')
-
-	await run_with_concurrency_limit(k, 16, async (entry) => {
+// aux.spotify_artist0
+export function pass_aux_spotify_artist0(entries: QueueEntry<string>[]) {
+	return run_with_concurrency_limit(entries, 16, async (entry) => {
 		const spotify_id = entry.payload
 		const data = await spotify_raw_artist(spotify_id)
 		if (!data) {
@@ -53,7 +52,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 		}
 
 		db.transaction(db => {
-			const [ident, _] = ident_cmd_unwrap_new(entry, 'artist_id')
+			const [ident, _] = get_ident(spotify_id, $spotify_artist, 'artist_id')
 
 			const links: LinkEntry[] = link_urls_unknown(ident, data.external_links)
 
@@ -76,16 +75,13 @@ export async function pass_artist_meta_spotify_supplementary() {
 				const largest: SpotifyImage | undefined = data.header_images.reduce((a, b) => a.width * a.height > b.width * b.height ? a : b)
 
 				if (largest) {
-					images_queue_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
+					image_queue_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
 				}
 			}
 
 			queue_complete(entry)
 		})
-		updated = true
 	})
-
-	return updated
 }
 
 type SpotifyImage = {

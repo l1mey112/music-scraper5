@@ -1,8 +1,10 @@
+import { sql } from "drizzle-orm"
 import { db } from "../db"
 import { locale_from_bcp_47 } from "../locale"
-import { ident_cmd_unwrap_new, images_queue_url, link_insert, links_from_text, locale_insert, queue_complete, queue_dispatch_immediate, queue_pop, queue_retry_later, insert_canonical, run_batched_zip, insert_track_artist, ident_id, queue_dispatch_chain_returning, link_urls_unknown, queue_dispatch_later, assert, run_with_concurrency_limit, queue_dispatch_seed, ident_cmd } from "../pass_misc"
+import { queue_complete, queue_dispatch_immediate, queue_retry_later } from "../pass"
+import { image_queue_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, if_not_exists as not_exists, get_ident_or_new, get_ident } from "../pass_misc"
 import { $youtube_channel, $youtube_video } from "../schema"
-import { ArtistId, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry } from "../types"
+import { ArtistId, Ident, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_playlist, meta_youtube_channel_v3, meta_youtube_video_is_short, meta_youtube_video_v3 } from "./youtube_api"
 
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
@@ -17,16 +19,23 @@ function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
 	return largest
 }
 
-// track.new.youtube_video
-export async function pass_track_new_youtube_video() {
-	let updated = false
-	const k = queue_pop<string>('track.new.youtube_video')
+// aux.assign_track_youtube_channel
+export function pass_aux_assign_track_youtube_channel(entries: QueueEntry<[TrackId, youtube_channel: string]>[]) {
+	for (const entry of entries) {
+		const [track_id, youtube_channel] = entry.payload
+		const [_, artist_id] = get_ident(youtube_channel, $youtube_channel, 'artist_id')
+		insert_track_artist(track_id, artist_id)
+		queue_complete(entry)
+	}
+}
 
+// track.index_youtube_video
+export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 	function batch_fn(entry: QueueEntry<string>[]) {
 		return meta_youtube_video_v3(entry.map(it => it.payload))
 	}
 
-	await run_batched_zip(k, 50, batch_fn, (entry, video) => {
+	return run_batched_zip(entries, 50, batch_fn, (entry, video) => {
 		// not found, retry again later
 		if (typeof video === 'string') {
 			queue_retry_later(entry)
@@ -38,7 +47,7 @@ export async function pass_track_new_youtube_video() {
 			let has_loc_description = false
 
 			const youtube_id = entry.payload
-			const [ident, track_id] = ident_cmd_unwrap_new(entry, 'track_id')
+			const [ident, track_id] = get_ident_or_new(youtube_id, $youtube_video, 'track_id')
 
 			const locales: LocaleEntry[] = []
 
@@ -115,7 +124,7 @@ export async function pass_track_new_youtube_video() {
 			const links = links_from_text(ident, video.description)
 
 			if (thumb) {
-				images_queue_url(ident, ImageKind["YouTube Thumbnail"], thumb.url)
+				image_queue_url(ident, ImageKind["YouTube Thumbnail"], thumb.url)
 			}
 
 			insert_canonical($youtube_video, video.id, youtube_id, {
@@ -123,32 +132,27 @@ export async function pass_track_new_youtube_video() {
 				channel_id: video.channelId,
 			})
 
-			const artist_ident = queue_dispatch_chain_returning('artist.new.youtube_channel', video.channelId)
-			insert_track_artist(track_id, ident_id<ArtistId>(artist_ident))
+			if (not_exists($youtube_channel, sql`id = ${video.channelId}`)) {
+				queue_dispatch_immediate('artist.index_youtube_channel', video.channelId)
+				queue_dispatch_immediate('aux.assign_track_youtube_channel', [track_id, video.channelId])
+			}
 
 			locale_insert(locales)
 			link_insert(links)
-			queue_dispatch_immediate('source.download.from_youtube_video', youtube_id, ident)
+			queue_dispatch_immediate('source.download_from_youtube_video', youtube_id)
 
 			queue_complete(entry)
 		})
-		updated = true
 	})
-
-	return updated
 }
 
-// artist.new.youtube_channel
-// *<id> means do not probe the entire channel
-export async function pass_artist_new_youtube_channel() {
-	let updated = false
-	const k = queue_pop<string>('artist.new.youtube_channel')
-
+// artist.index_youtube_channel
+export function pass_artist_index_youtube_channel(entries: QueueEntry<string>[]) {
 	function batch_fn(entry: QueueEntry<string>[]) {
 		return meta_youtube_channel_lemmnos(entry.map(it => it.payload))
 	}
 
-	await run_batched_zip(k, 50, batch_fn, (entry, channel) => {
+	return run_batched_zip(entries, 50, batch_fn, (entry, channel) => {
 		// not found, retry again later
 		if (typeof channel === 'string') {
 			queue_retry_later(entry)
@@ -156,9 +160,8 @@ export async function pass_artist_new_youtube_channel() {
 		}
 
 		db.transaction(db => {
-			const star = entry.payload.startsWith('*')
-			const youtube_id = star ? entry.payload.slice(1) : entry.payload
-			const [ident, artist_id] = ident_cmd_unwrap_new(entry, 'artist_id')
+			const youtube_id = entry.payload
+			const [ident, artist_id] = get_ident_or_new(youtube_id, $youtube_channel, 'artist_id')
 
 			type ChannelKey = Exclude<keyof typeof channel.images, 'tvBanner' | 'mobileBanner'>
 
@@ -178,7 +181,7 @@ export async function pass_artist_new_youtube_channel() {
 				const thumb = largest_image(images)
 	
 				if (thumb) {
-					images_queue_url(ident, kind, thumb.url)
+					image_queue_url(ident, kind, thumb.url)
 				}
 			}
 
@@ -189,14 +192,7 @@ export async function pass_artist_new_youtube_channel() {
 
 			// channel title/display name isn't present in lemmnos
 			// need to request elsewhere
-			queue_dispatch_immediate('artist.meta.youtube_channel_aux', youtube_id, ident)
-
-			if (star) {
-				// index literally every single video
-				console.log('indexing youtube channel', youtube_id)
-				queue_dispatch_immediate('artist.index.youtube_channel', youtube_id)
-			}
-
+			queue_dispatch_immediate('aux.youtube_channel0', youtube_id)
 			link_insert(link_urls_unknown(ident, channel.about.links.map(it => it.url)))
 
 			const data = {
@@ -209,22 +205,16 @@ export async function pass_artist_new_youtube_channel() {
 			// repeat again in another day!
 			queue_retry_later(entry)
 		})
-		updated = true
 	})
-
-	return updated
 }
 
-// artist.meta.youtube_channel_aux
-export async function pass_artist_meta_youtube_channel_aux() {
-	let updated = false
-	const k = queue_pop<string>('artist.meta.youtube_channel_aux')
-
+// aux.youtube_channel0
+export function pass_aux_youtube_channel0(entries: QueueEntry<string>[]) {
 	function batch_fn(entry: QueueEntry<string>[]) {
 		return meta_youtube_channel_v3(entry.map(it => it.payload))
 	}
 
-	await run_batched_zip(k, 50, batch_fn, (entry, channel) => {
+	return run_batched_zip(entries, 50, batch_fn, (entry, channel) => {
 		if (typeof channel === 'string') {
 			queue_complete(entry)
 			return
@@ -237,8 +227,7 @@ export async function pass_artist_meta_youtube_channel_aux() {
 		// its still higher quality as this is what people will see
 
 		db.transaction(db => {
-			assert(entry.target)
-			const [ident, artist_id] = ident_cmd_unwrap_new(entry, 'artist_id')
+			const [ident, _] = get_ident(entry.payload, $youtube_channel, 'artist_id')
 
 			if (channel.description) {
 				const description: LocaleEntry = {
@@ -261,15 +250,15 @@ export async function pass_artist_meta_youtube_channel_aux() {
 			locale_insert(display_name)
 			queue_complete(entry)
 		})
-		updated = true
 	})
-
-	return updated
 }
 
-// artist.index.youtube_channel
+
+// artist.meta.youtube_channel_aux
+/* 
+// artist.index_youtube_channel
 export function pass_artist_index_youtube_channel() {
-	const k = queue_pop<string>('artist.index.youtube_channel')
+	const k = queue_pop<string>('artist.index_youtube_channel')
 
 	// https://stackoverflow.com/questions/18953499/youtube-api-to-fetch-all-videos-on-a-channel
 
@@ -329,4 +318,4 @@ export async function pass_track_seed_youtube_playlist() {
 	})
 
 	return updated
-}
+} */
