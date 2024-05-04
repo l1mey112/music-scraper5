@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm"
 import { db, sqlite } from "../db"
-import { ident_make } from "../pass_misc"
-import { $album_track, $external_links, $images, $locale, $source, $spotify_track, $track, $track_artist, $youtube_video } from "../schema"
+import { ident_make, merge } from "../pass_misc"
+import { $album_track, $external_links, $image, $locale, $source, $spotify_track, $track, $track_artist, $youtube_video } from "../schema"
 import { FSRef, Ident, TrackId } from "../types"
 
 // with a mostly untyped query, its really annoying to have to get around drizzle
@@ -73,91 +73,6 @@ const track_chromaprint = sqlite.prepare<{ track_id1: TrackId, track_id2: TrackI
 		and t2s.duration_s between t1s.duration_s - 7 and t1s.duration_s + 7
 `)
 
-// will need to go ahead and merge one into the other
-function merge_track(track_id1: TrackId, track_id2: TrackId) {
-	const migration_tables_track_id = [
-		$track_artist, $album_track,
-		$youtube_video, $spotify_track,
-		$source,
-	]
-
-	const migration_tables_ident = [
-		$images,
-		$locale,
-		$external_links,
-	]
-
-	const track_id1_ident = ident_make(track_id1, 'track_id')
-	const track_id2_ident = ident_make(track_id2, 'track_id')
-
-	db.transaction(db => {
-		// merge track_id2 into track_id1
-		for (const table of migration_tables_track_id) {
-			try {
-				db.update(table)
-					.set({ track_id: track_id1 })
-					.where(sql`track_id = ${track_id2}`)
-					.run()
-			} catch {
-				// ignore
-			}
-		}
-
-		for (const table of migration_tables_ident) {
-			try {
-				db.update(table)
-					.set({ ident: track_id1_ident })
-					.where(sql`ident = ${track_id2_ident}`)
-					.run()
-			} catch {
-				// ignore
-			}
-		}
-
-		// perform a merge using two selects, merge object, then delete and update
-		// it is convoluted and slow, but simpler logic using JS and typechecked using drizzle
-
-		const track_id1_obj = db.select()
-			.from($track)
-			.where(sql`id = ${track_id1}`)
-			.get()!
-
-		const track_id2_obj = db.select()
-			.from($track)
-			.where(sql`id = ${track_id2}`)
-			.get()!
-
-		// remove all keys that are undefined or null
-		function clear_null(obj: any) {
-			for (const key in obj) {
-				if (obj[key] === undefined || obj[key] === null) {
-					delete obj[key]
-				}
-			}
-		}
-
-		clear_null(track_id1_obj)
-
-		const merged_track = {
-			...track_id2_obj,
-			...track_id1_obj,
-		}
-
-		delete (merged_track as any).id // sure
-
-		db.delete($track)
-			.where(sql`id = ${track_id2}`)
-			.run()
-
-		db.update($track)
-			.set(merged_track)
-			.where(sql`id = ${track_id1}`)
-			.run()
-	})
-
-	console.log(`merged track ${track_id1_ident} into ${track_id2_ident}`)
-}
-
 // track.merge_using_known_heuristics
 export function pass_track_merge_using_known_heuristics() {
 	// this is expensive to run, bisecting it into smaller chunks is a good idea
@@ -188,6 +103,6 @@ export function pass_track_merge_using_known_heuristics() {
 
 	for (const tuple of tuple_set) {
 		const [track_id1, track_id2] = tuple.split(',').map(Number) as [TrackId, TrackId]
-		merge_track(track_id1, track_id2)
+		merge('track_id', track_id1, track_id2)
 	}
 }

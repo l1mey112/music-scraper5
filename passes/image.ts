@@ -1,10 +1,11 @@
+import { sql } from 'drizzle-orm'
 import { db } from '../db'
 import { nfetch } from '../fetch'
 import { fs_hash_path, fs_sharded_lazy_bunfile } from '../fs'
 import { mime_ext } from '../mime'
 import { queue_complete, queue_retry_later } from '../pass'
 import { get_ident, run_with_concurrency_limit } from '../pass_misc'
-import { $images } from '../schema'
+import { $image } from '../schema'
 import { Ident, ImageKind, QueueEntry } from '../types'
 import sizeOf from 'image-size'
 
@@ -18,6 +19,18 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 		// doesn't exist, retry later
 		if (!resp.ok) {
 			queue_retry_later(entry)
+			return
+		}
+
+		// check if the url exists already
+		const has = db.select({ chk: sql`1` })
+			.from($image)
+			.where(sql`ident = ${ident} and immutable_url = ${url}`)
+			.get()
+
+		if (has) {
+			console.log(`image already exists: ${url}`)
+			queue_complete(entry)
 			return
 		}
 
@@ -36,7 +49,7 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 				return
 			}
 
-			db.insert($images)
+			db.insert($image)
 				.values({ hash: new_hash, ident, kind: image_kind, width: size.width, height: size.height })
 				.run()
 

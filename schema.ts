@@ -135,18 +135,20 @@ export const $queue = sqliteTable('queue', {
 	try_count: integer('try_count').default(0).notNull(), // amount of tries thus far
 }, (t) => ({
 	idx0: index('queue.idx0').on(t.expiry, t.pass),
-	//uniq: unique('queue.uniq').on(t.target, t.cmd, t.payload), // unique for removing duplicates
+	uniq: unique('queue.uniq').on(t.pass, t.payload), // unique for removing duplicates
 }))
 
-// WITHOUT-ROWID: images
-export const $images = sqliteTable('images', {
+// WITHOUT-ROWID: image
+export const $image = sqliteTable('image', {
 	hash: text('hash').$type<FSRef>().primaryKey(),
 	ident: text('ident').$type<Ident>().notNull(),
 	kind: integer('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
+	immutable_url: text('immutable_url'), // url that will always return this image
 }, (t) => ({
 	pkidx: index("images.ident_idx").on(t.ident, t.hash),
+	pkimm: unique("images.immutable_url_uniq").on(t.immutable_url),
 }))
 
 // chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less

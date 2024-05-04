@@ -2,7 +2,7 @@ import { pass_spotify_api } from "../cred"
 import { db } from "../db"
 import { AlbumId, ArtistId, ImageKind, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { $spotify_album, $spotify_artist, $spotify_track } from "../schema"
-import { get_ident, get_ident_or_new, if_not_exists, image_queue_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
+import { get_ident, get_ident_or_new, if_not_exists, image_queue_immutable_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
 import { queue_complete, queue_dispatch_immediate, queue_retry_later } from "../pass"
 import { sql } from "drizzle-orm"
 
@@ -154,7 +154,7 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 			//       but we do anyway. its the users choice at the end of the day
 			const largest = album.images[0]
 			if (largest) {
-				image_queue_url(ident, ImageKind["Cover Art"], largest.url)
+				image_queue_immutable_url(ident, ImageKind["Cover Art"], largest.url)
 			}
 
 			insert_canonical($spotify_album, album.id, spotify_id, {
@@ -202,7 +202,7 @@ export function pass_artist_index_spotify_artist(entries: QueueEntry<string>[]) 
 			// > The cover art for the artist in various sizes, widest first.
 			const largest = artist.images[0]
 			if (largest) {
-				image_queue_url(ident, ImageKind["Profile Art"], largest.url)
+				image_queue_immutable_url(ident, ImageKind["Profile Art"], largest.url)
 			}
 
 			insert_canonical($spotify_artist, artist.id, spotify_id, {

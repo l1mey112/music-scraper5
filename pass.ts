@@ -69,6 +69,7 @@ export function queue_dispatch_immediate<T extends PassIdentifier>(pass: T, payl
 			pass: pass_hash(pass),
 			payload,
 		})
+		.onConflictDoNothing()
 		.run()
 }
 

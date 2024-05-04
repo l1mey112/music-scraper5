@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm"
 import { db } from "../db"
 import { locale_from_bcp_47 } from "../locale"
 import { queue_complete, queue_dispatch_immediate, queue_retry_later } from "../pass"
-import { image_queue_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, if_not_exists as not_exists, get_ident_or_new, get_ident } from "../pass_misc"
+import { image_queue_immutable_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, if_not_exists as not_exists, get_ident_or_new, get_ident } from "../pass_misc"
 import { $youtube_channel, $youtube_video } from "../schema"
 import { ArtistId, Ident, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_playlist, meta_youtube_channel_v3, meta_youtube_video_is_short, meta_youtube_video_v3 } from "./youtube_api"
@@ -124,7 +124,7 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 			const links = links_from_text(ident, video.description)
 
 			if (thumb) {
-				image_queue_url(ident, ImageKind["YouTube Thumbnail"], thumb.url)
+				image_queue_immutable_url(ident, ImageKind["YouTube Thumbnail"], thumb.url)
 			}
 
 			insert_canonical($youtube_video, video.id, youtube_id, {
@@ -181,7 +181,7 @@ export function pass_artist_index_youtube_channel(entries: QueueEntry<string>[])
 				const thumb = largest_image(images)
 	
 				if (thumb) {
-					image_queue_url(ident, kind, thumb.url)
+					image_queue_immutable_url(ident, kind, thumb.url)
 				}
 			}
 

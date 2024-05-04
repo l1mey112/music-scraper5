@@ -4,7 +4,7 @@
 import { db } from "../db"
 import { nfetch } from "../fetch"
 import { queue_complete } from "../pass"
-import { get_ident, image_queue_url, link_insert, link_urls_unknown, links_from_text, locale_insert, run_with_concurrency_limit } from "../pass_misc"
+import { get_ident, image_queue_immutable_url, link_insert, link_urls_unknown, links_from_text, locale_insert, run_with_concurrency_limit } from "../pass_misc"
 import { $spotify_artist } from "../schema"
 import { ImageKind, Link, LinkEntry, LocaleDesc, LocaleEntry, QueueEntry } from "../types"
 
@@ -75,7 +75,7 @@ export function pass_aux_spotify_artist0(entries: QueueEntry<string>[]) {
 				const largest: SpotifyImage | undefined = data.header_images.reduce((a, b) => a.width * a.height > b.width * b.height ? a : b)
 
 				if (largest) {
-					image_queue_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
+					image_queue_immutable_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
 				}
 			}
 

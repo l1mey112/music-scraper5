@@ -1,6 +1,6 @@
 import { InferInsertModel, SQL, sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
-import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_artist, $album_track } from "./schema"
+import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_artist, $album_track, $image, $source } from "./schema"
 import { snowflake } from "./ids"
 import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
@@ -322,6 +322,121 @@ export function get_ident<T extends ArticleKind>(foreign_id: string, foreign_tab
 	return [ident_make(a.id, kind), a.id]
 }
 
+export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: KindToId[T]) {
+	const migration_tables_ident = [
+		$image,
+		$locale,
+		$external_links,
+	]
+
+	let primary
+	let migration_tables_id
+
+	switch (kind) {
+		case 'track_id': {
+			primary = $track
+			migration_tables_id = [
+				$track_artist, $album_track,
+				$youtube_video, $spotify_track,
+				$source,
+			]
+			break
+		}
+		case 'album_id': {
+			primary = $album
+			migration_tables_id = [
+				$album_artist, $album_track,
+				$spotify_album,
+			]
+			break
+		}
+		case 'artist_id': {
+			primary = $artist
+			migration_tables_id = [
+				$track_artist, $album_artist,
+				$spotify_artist,
+				$youtube_channel,
+			]
+			break
+		}
+		default: {
+			assert(false)
+		}
+	}
+
+	const ident1 = ident_make(id1, kind)
+	const ident2 = ident_make(id2, kind)
+
+	// merge id2 into id1
+	db.transaction(db => {
+		for (const table of migration_tables_id) {
+			try {
+				db.update(table)
+					.set({ [kind]: id1 })
+					.where(sql`${sql.identifier(kind)} = ${id2}`)
+					.run()
+			} catch {
+				// ignore
+			}
+		}
+
+		for (const table of migration_tables_ident) {
+			try {
+				db.update(table)
+					.set({ ident: ident1 })
+					.where(sql`ident = ${ident2}`)
+					.run()
+			} catch {
+				// ignore
+			}
+		}
+
+		// perform a merge using two selects, merge object, then delete and update
+		// it is convoluted and slow, but simpler logic using JS and typechecked using drizzle
+
+		const id1_obj = db.select()
+			.from(primary)
+			.where(sql`id = ${id1}`)
+			.get() ?? {}
+
+		const id2_obj = db.select()
+			.from(primary)
+			.where(sql`id = ${id2}`)
+			.get() ?? {}
+
+		// remove all keys that are undefined or null
+		function clear_null(obj: any) {
+			for (const key in obj) {
+				if (obj[key] === undefined || obj[key] === null) {
+					delete obj[key]
+				}
+			}
+		}
+
+		clear_null(id1_obj)
+
+		const merged_obj = {
+			...id2_obj,
+			...id1_obj,
+		}
+
+		delete (merged_obj as any).id // sure
+
+		db.delete(primary)
+			.where(sql`id = ${id2}`)
+			.run()
+
+		// upsert
+		db.insert(primary)
+			.values({ ...merged_obj, id: id1 })
+			.onConflictDoUpdate({
+				target: sql`${primary}."id"`,
+				set: merged_obj,
+			})
+			.run()
+	})
+}
+
 export function link_insert(link: LinkEntry | LinkEntry[]) {
 	if (link instanceof Array) {		
 		if (link.length === 0) {
@@ -411,6 +526,7 @@ export function locale_insert(locales: LocaleEntry | LocaleEntry[]) {
 // the API might return a different id (canonical), instead of the id we know (known)
 // canonical <- known (into canonical)
 // will completely replace rows
+// no need to merge, nothing would get lost if `get_ident_or_new(table, known)` was called and used
 export function insert_canonical<T extends SQLiteTable>(table: T, canonical: string, known: string, data: Omit<InferInsertModel<T>, 'id'>) {
 	if (canonical !== known) {
 		console.log('insert_canonical', canonical, known)
@@ -508,7 +624,7 @@ export function ident_id<T extends TrackId | AlbumId | ArtistId>(id: Ident): T {
 
 // inserts [ImageKind, string] into the queue
 // it is in an array/tuple for deterministic JSON.stringify etc
-export function image_queue_url(ident: Ident, kind: ImageKind, url: string) {
+export function image_queue_immutable_url(ident: Ident, kind: ImageKind, url: string) {
 	queue_dispatch_immediate('image.download_image_url', [ident, kind, url])
 }
 
