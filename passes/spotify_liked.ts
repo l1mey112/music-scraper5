@@ -1,14 +1,15 @@
 import { sql } from "drizzle-orm"
-import { db } from "../db"
-import { $kv_store } from "../schema"
+import { $spotify_track } from "../schema"
 import { pass_spotify_user } from "../cred"
-import { queue_dispatch_chain_immediate, run_with_concurrency_limit } from "../pass_misc"
+import { not_exists, run_with_concurrency_limit } from "../pass_misc"
+import { QueueEntry } from "../types"
+import { queue_again_later, queue_dispatch_immediate } from "../pass"
 
 // TODO: whilst it uses the current user, this can have issues if the track isn't available in the region
 //       for an unbiased API search/index, use the client credentials flow/not the saved tracks API.
 //       this will require double request/overhead
 
-type IndexData = {
+/* type IndexData = {
 	[user_id: string]: number
 }
 
@@ -33,47 +34,30 @@ function kv_store(data: IndexData) {
 			set: { data },
 		})
 		.run()
-}
+} */
 
-// track.new.spotify_index_liked
-export async function pass_track_new_spotify_index_liked() {
-	const [api, user] = await pass_spotify_user()
-
-	const indexdata = kv_get()
-	let watermark = indexdata[user.id] || 0
-
-	// songs are added to the top
-	// fetch from bottom up
-
-	// - xxxx __ - index 0
-	// o xxxx   \ watermark level
-	// o xxxx
-	// o xxxx __ zero watermark
+// aux.index_spotify_liked
+export async function pass_aux_index_spotify_liked(entries: QueueEntry<0>[]) {
+	const [api, _] = await pass_spotify_user()
 
 	const ini = await api.currentUser.tracks.savedTracks(1)
 	let total = ini.total
 
-	let offset = total - watermark
-	if (offset > 0) {
-		offset = Math.max(0, offset - 50)
+	const offsets = Array.from({ length: Math.ceil(total / 50) }, (_, i) => i * 50)
 
-		const offsets = Array.from({ length: Math.ceil(offset / 50) }, (_, i) => i * 50)
+	await run_with_concurrency_limit(offsets, 12, async offset => {
+		const tracks = await api.currentUser.tracks.savedTracks(50, offset)
 
-		await run_with_concurrency_limit(offsets, 8, async offset => {
-			const tracks = await api.currentUser.tracks.savedTracks(50, offset)
-
-			for (const { track } of tracks.items) {
-				queue_dispatch_chain_immediate('track.new.spotify_track', track.id)
+		for (const { track } of tracks.items) {
+			if (not_exists($spotify_track, sql`id = ${track.id}`)) {
+				queue_dispatch_immediate('track.index_spotify_track', track.id)
 			}
+		}
+	})
 
-			console.log(`fetched ${tracks.items.length} tracks, total ${watermark + tracks.items.length} / ${total}`)
-
-			watermark += tracks.items.length
-		})
-
-		watermark = total
+	// because unique on (pass, payload) only one of these can exist
+	// but just be safe	
+	for (const entry of entries) {
+		queue_again_later(entry)
 	}
-
-	indexdata.user_id = watermark
-	kv_store(indexdata)
 }

@@ -75,7 +75,7 @@ export function queue_dispatch_immediate<T extends PassIdentifier>(pass: T, payl
 
 // mutate the existing queue entry to retry later
 // increments `retry_count` which can be used to determine if the entry should be removed after manual review
-export function queue_retry_failed(entry: QueueEntry, expiry_after_millis: number = DAY) {
+export function queue_retry_failed(entry: QueueEntry<unknown>, expiry_after_millis: number = DAY) {
 	db.update($queue)
 		.set({ expiry: Date.now() + expiry_after_millis, try_count: sql`${$queue.try_count} + 1` })
 		.where(sql`id = ${entry.id}`)
@@ -84,14 +84,14 @@ export function queue_retry_failed(entry: QueueEntry, expiry_after_millis: numbe
 
 // mutate the existing queue entry to retry later
 // doesn't increment `retry_count`, this function is for steady retries
-export function queue_again_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
+export function queue_again_later(entry: QueueEntry<unknown>, expiry_after_millis: number = DAY) {
 	db.update($queue)
 		.set({ expiry: Date.now() + expiry_after_millis })
 		.where(sql`id = ${entry.id}`)
 		.run()
 }
 
-export function queue_complete(entry: QueueEntry) {
+export function queue_complete(entry: QueueEntry<unknown>) {
 	db.delete($queue)
 		.where(sql`id = ${entry.id}`)
 		.run()
@@ -145,7 +145,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 					.all()
 
 				if (k.length > 0) {
-					const converted = k.map<QueueEntry>(it => {
+					const converted = k.map<QueueEntry<unknown>>(it => {
 						const entry = {
 							...it,
 							pass: name,

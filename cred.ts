@@ -10,6 +10,7 @@ type CredentialStore = {
 	'spotify_api': [string, string][] // [client_id, client_secret]
 	'deezer_arl': [string][]
 	'spotify_dl_user': [string, string][] // [username, password]
+	'spotify_user': AccessToken[]
 }
 
 /* type CredentialProp = {
@@ -39,11 +40,22 @@ const credential_props: CredentialProp[] = [
 	},
 ] */
 
+function cred_db_set(store: CredentialStore) {
+	db.insert($kv_store)
+		.values({ kind: 'cred', data: store })
+		.onConflictDoUpdate({
+			target: $kv_store.kind,
+			set: { data: store }
+		})
+		.run()
+}
+
 function cred_db_get(): CredentialStore {
 	let store: CredentialStore = {
 		'spotify_api': [],
 		'deezer_arl': [],
 		'spotify_dl_user': [],
+		'spotify_user': [],
 	}
 
 	const cred = db.select({ data: $kv_store.data })
@@ -67,6 +79,11 @@ export function pass_cred_get<T extends CredentialKind>(kind: T): CredentialStor
 		pass_exception(`[cred_get] ${kind} not found`)
 	}
 	
+	return datum
+}
+
+function pass_cred_get_bare<T extends CredentialKind>(kind: T): CredentialStore[T] {
+	const datum = cred_db_get()[kind]
 	return datum
 }
 
@@ -117,8 +134,17 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 	const client_redirect_uri = 'http://localhost:8080/callback'
 	const [[client_id, client_secret], ] = pass_cred_get('spotify_api')
 
-	async function spotify_auth_user(): Promise<SpotifyApi> {
-		let sdk: SpotifyApi | undefined
+	const [access_token, ] = pass_cred_get_bare('spotify_user')
+
+	if (access_token) {
+		// TODO: duplicated code
+		const api = SpotifyApi.withAccessToken(client_id, access_token)
+		_spotify_user = [api, await api.currentUser.profile()]
+		return _spotify_user
+	}
+
+	async function spotify_auth_user(): Promise<AccessToken> {
+		let the_keys: AccessToken | undefined
 
 		console.log(`spotify: listening on http://localhost:8080/`)
 		console.log(`spotify: awaiting accept`)
@@ -139,6 +165,11 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 					}
 					case '/callback': {
 						const code = url.searchParams.get('code')
+						const error = url.searchParams.get('error')
+
+						if (error) {
+							throw new Error('auth failed: ' + error)
+						}
 
 						if (!code) {
 							break out
@@ -166,8 +197,7 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 							throw new Error('auth failed')
 						}
 						const auth_json = await auth_data.json()
-
-						sdk = SpotifyApi.withAccessToken(client_id, auth_json as AccessToken)
+						the_keys = auth_json as AccessToken
 
 						return new Response('auth completed, you may close this window now', {status: 200})
 					}
@@ -176,17 +206,22 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 			},
 		})
 
-		while (!sdk) {
-			await new Promise((resolve) => setTimeout(resolve, 1))
+		while (!the_keys) {
+			await new Promise((resolve) => setTimeout(resolve, 100))
 		}
 
 		server.stop(true)
 
-		return sdk
+		return the_keys
 	}
 
-	const api = await spotify_auth_user()
+	const token = await spotify_auth_user()
+	const api = SpotifyApi.withAccessToken(client_id, token)
 	const profile = await api.currentUser.profile()
+
+	const store = cred_db_get()
+	store['spotify_user'] = [token]
+	cred_db_set(store)
 
 	_spotify_user = [api, profile]
 	return _spotify_user

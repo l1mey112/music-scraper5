@@ -6,7 +6,7 @@ import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
 import { sql } from "drizzle-orm"
 import { get_ident, run_with_concurrency_limit } from "../pass_misc"
-import { queue_complete, queue_dispatch_immediate } from "../pass"
+import { queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 
 // if contains no preview, then it's not available
 const can_download_source = sqlite.prepare<number, [string]>(`
@@ -49,9 +49,8 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 		} catch (e) {
 			console.error('failed to download track', spotify_id)
 			console.error(e)
-			//queue_retry_later(entry)
-			//return
-			throw e
+			queue_retry_failed(entry)
+			return
 		}
 
 		const hash = (hash_part + '.ogg') as FSRef

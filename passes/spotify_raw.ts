@@ -12,6 +12,9 @@ export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArt
 	const url = `https://open.spotify.com/artist/${spotify_id}`
 	const response = await nfetch(url)
 	const text = await response.text()
+	if (!response.ok) {
+		return undefined
+	}
 	const match = text.match(/<script\s+id="initial-state"\s+type="text\/plain">([^<]+)<\/script>/)
 	if (!match) {
 		console.log('spotify_raw_artist: no match')
