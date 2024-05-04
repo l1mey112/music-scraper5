@@ -3,7 +3,7 @@ import { db } from '../db'
 import { nfetch } from '../fetch'
 import { fs_hash_path, fs_sharded_lazy_bunfile } from '../fs'
 import { mime_ext } from '../mime'
-import { queue_complete, queue_retry_later } from '../pass'
+import { queue_complete, queue_retry_failed } from '../pass'
 import { get_ident, run_with_concurrency_limit } from '../pass_misc'
 import { $image } from '../schema'
 import { Ident, ImageKind, QueueEntry } from '../types'
@@ -18,7 +18,7 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 
 		// doesn't exist, retry later
 		if (!resp.ok) {
-			queue_retry_later(entry)
+			queue_retry_failed(entry)
 			return
 		}
 
@@ -45,7 +45,7 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 			if (!size.width || !size.height) {
 				// so damn rare, malformed image??
 				console.error(`sizeOf returned no width or height for ${new_hash}`, entry)
-				queue_retry_later(entry)
+				queue_retry_failed(entry)
 				return
 			}
 

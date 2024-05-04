@@ -1,7 +1,7 @@
 import { db_close } from "./db";
 import { pass } from "./pass";
 import { pass_track_new_spotify_index_liked } from "./passes/spotify_liked";
-//import './indexes' // seed the queue
+import './seed' // seed the queue
 
 function exit() {
 	db_close()

@@ -73,9 +73,20 @@ export function queue_dispatch_immediate<T extends PassIdentifier>(pass: T, payl
 		.run()
 }
 
-export function queue_retry_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
+// mutate the existing queue entry to retry later
+// increments `retry_count` which can be used to determine if the entry should be removed after manual review
+export function queue_retry_failed(entry: QueueEntry, expiry_after_millis: number = DAY) {
 	db.update($queue)
 		.set({ expiry: Date.now() + expiry_after_millis, try_count: sql`${$queue.try_count} + 1` })
+		.where(sql`id = ${entry.id}`)
+		.run()
+}
+
+// mutate the existing queue entry to retry later
+// doesn't increment `retry_count`, this function is for steady retries
+export function queue_again_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
+	db.update($queue)
+		.set({ expiry: Date.now() + expiry_after_millis })
 		.where(sql`id = ${entry.id}`)
 		.run()
 }

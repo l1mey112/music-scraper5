@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm"
 import { db } from "../db"
 import { locale_from_bcp_47 } from "../locale"
-import { queue_complete, queue_dispatch_immediate, queue_retry_later } from "../pass"
-import { image_queue_immutable_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, if_not_exists as not_exists, get_ident_or_new, get_ident } from "../pass_misc"
+import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
+import { image_queue_immutable_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, not_exists, get_ident_or_new, get_ident } from "../pass_misc"
 import { $youtube_channel, $youtube_video } from "../schema"
 import { ArtistId, Ident, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_playlist, meta_youtube_channel_v3, meta_youtube_video_is_short, meta_youtube_video_v3 } from "./youtube_api"
@@ -38,7 +38,7 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 	return run_batched_zip(entries, 50, batch_fn, (entry, video) => {
 		// not found, retry again later
 		if (typeof video === 'string') {
-			queue_retry_later(entry)
+			queue_retry_failed(entry)
 			return
 		}
 
@@ -155,7 +155,7 @@ export function pass_artist_index_youtube_channel(entries: QueueEntry<string>[])
 	return run_batched_zip(entries, 50, batch_fn, (entry, channel) => {
 		// not found, retry again later
 		if (typeof channel === 'string') {
-			queue_retry_later(entry)
+			queue_retry_failed(entry)
 			return
 		}
 
@@ -203,7 +203,7 @@ export function pass_artist_index_youtube_channel(entries: QueueEntry<string>[])
 			insert_canonical($youtube_channel, channel.id, youtube_id, data)
 
 			// repeat again in another day!
-			queue_retry_later(entry)
+			queue_again_later(entry)
 		})
 	})
 }
@@ -253,46 +253,9 @@ export function pass_aux_youtube_channel0(entries: QueueEntry<string>[]) {
 	})
 }
 
-
-// artist.meta.youtube_channel_aux
-/* 
-// artist.index_youtube_channel
-export function pass_artist_index_youtube_channel() {
-	const k = queue_pop<string>('artist.index_youtube_channel')
-
-	// https://stackoverflow.com/questions/18953499/youtube-api-to-fetch-all-videos-on-a-channel
-
-	// to extract uploads, take youtube ID and change UC to UU
-	//
-	//       reol channel id: UCB6pJFaFByws3dQj4AdLdyA
-	//                        ^^
-	// reol uploads playlist: UUB6pJFaFByws3dQj4AdLdyA
-	//                        ^^
-	//
-	// https://www.youtube.com/playlist?list=UUB6pJFaFByws3dQj4AdLdyA
-	//                                       ^^^^^^^^^^^^^^^^^^^^^^^^
-
-	for (const entry of k) {
-		const youtube_id = entry.payload
-		
-		assert(youtube_id.startsWith('UC'))
-
-		const ident = ident_cmd(entry)
-		const playlist_id = 'UU' + youtube_id.slice(2)
-
-		queue_dispatch_immediate('track.seed.youtube_playlist', playlist_id, ident)
-		queue_retry_later(entry) // *.index.* passes repeat
-	}
-
-	return k.length > 0
-}
-
-// track.seed.youtube_playlist
-export async function pass_track_seed_youtube_playlist() {
-	let updated = false
-	const k = queue_pop<string>('track.seed.youtube_playlist')
-
-	await run_with_concurrency_limit(k, 4, async (entry) => {
+// aux.index_youtube_playlist
+export function pass_aux_index_youtube_playlist(entries: QueueEntry<string>[]) {
+	return run_with_concurrency_limit(entries, 4, async (entry) => {
 		const youtube_id = entry.payload
 
 		const videos = await meta_youtube_channel_playlist(youtube_id)
@@ -307,15 +270,14 @@ export async function pass_track_seed_youtube_playlist() {
 
 		db.transaction(db => {
 			for (const video_id of videos) {
-				if (video_id) {
-					queue_dispatch_seed('track.new.youtube_video', video_id)
+				if (video_id && not_exists($youtube_video, sql`id = ${video_id}`)) {
+					queue_dispatch_immediate('track.index_youtube_video', video_id)
 				}
 			}
 			console.log(`queued ${videos.length} videos from playlist ${youtube_id}`)
-			queue_complete(entry)
-		})
-		updated = true
-	})
 
-	return updated
-} */
+			// another day
+			queue_again_later(entry)
+		})
+	})
+}

@@ -61,7 +61,7 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 				.values({
 					hash,
 					track_id,
-					bitrate: 160000, // 160kbps
+					bitrate: 160, // 160kbps
 				})
 				.run()
 

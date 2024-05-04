@@ -2,8 +2,8 @@ import { pass_spotify_api } from "../cred"
 import { db } from "../db"
 import { AlbumId, ArtistId, ImageKind, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { $spotify_album, $spotify_artist, $spotify_track } from "../schema"
-import { get_ident, get_ident_or_new, if_not_exists, image_queue_immutable_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
-import { queue_complete, queue_dispatch_immediate, queue_retry_later } from "../pass"
+import { get_ident, get_ident_or_new, not_exists, image_queue_immutable_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
+import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { sql } from "drizzle-orm"
 
 // aux.assign_track_spotify_artist
@@ -52,7 +52,7 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 	return run_batched_zip(entries, 50, batch_fn, (entry, track) => {
 		// null (track doesn't exist), retry again later
 		if (!track) {
-			queue_retry_later(entry)
+			queue_retry_failed(entry)
 			return
 		}
 
@@ -70,7 +70,7 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 				preferred: true,
 			}
 
-			if (if_not_exists($spotify_album, sql`id = ${spotify_album_id}`)) {
+			if (not_exists($spotify_album, sql`id = ${spotify_album_id}`)) {
 				queue_dispatch_immediate('album.index_spotify_album', spotify_album_id)
 			}
 			for (const artist of track.artists) {
@@ -104,7 +104,7 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 	return run_batched_zip(entries, 20, batch_fn, async (entry, album) => {
 		// null (track doesn't exist), retry again later
 		if (!album) {
-			queue_retry_later(entry)
+			queue_retry_failed(entry)
 			return
 		}
 
@@ -127,7 +127,7 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 			}
 
 			for (const track of tracks) {
-				if (if_not_exists($spotify_track, sql`id = ${track.id}`)) {
+				if (not_exists($spotify_track, sql`id = ${track.id}`)) {
 					queue_dispatch_immediate('track.index_spotify_track', track.id)
 				}
 				queue_dispatch_immediate('aux.assign_album_spotify_track', [album_id, track.id])
@@ -141,7 +141,7 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 			}
 
 			for (const artist of album.artists) {
-				if (if_not_exists($spotify_artist, sql`id = ${artist.id}`)) {
+				if (not_exists($spotify_artist, sql`id = ${artist.id}`)) {
 					queue_dispatch_immediate('artist.index_spotify_artist', artist.id)
 				}
 				queue_dispatch_immediate('aux.assign_album_spotify_artist', [album_id, artist.id])
@@ -182,7 +182,7 @@ export function pass_artist_index_spotify_artist(entries: QueueEntry<string>[]) 
 	return run_batched_zip(entries, 50, batch_fn, (entry, artist) => {
 		// null (track doesn't exist), retry again later
 		if (!artist) {
-			queue_retry_later(entry)
+			queue_retry_failed(entry)
 			return
 		}
 
@@ -210,7 +210,9 @@ export function pass_artist_index_spotify_artist(entries: QueueEntry<string>[]) 
 			})
 
 			queue_dispatch_immediate('aux.spotify_artist0', artist.id)
-			queue_complete(entry)
+
+			// repeat another day
+			queue_again_later(entry)
 		})
 	})
 }

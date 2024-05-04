@@ -5,7 +5,7 @@ import { FSRef, QueueEntry } from "../types"
 import { $source, $youtube_video } from "../schema"
 import { sql } from "drizzle-orm"
 import { get_ident, run_with_concurrency_limit } from "../pass_misc"
-import { queue_complete, queue_dispatch_immediate, queue_retry_later } from "../pass"
+import { queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 
 const has_video_source = sqlite.prepare<number, [string]>(`
 	select 1
@@ -50,7 +50,7 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 			output_s = await ytdl.execPromise(args)
 		} catch (e) {
 			console.log('source.download.from_youtube_video: caught', e)
-			queue_retry_later(entry)
+			queue_retry_failed(entry)
 			return
 		}
 
@@ -62,7 +62,7 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 				.values({
 					hash,
 					track_id,
-					bitrate: output.bitrate * 1000, // kbps to bps
+					bitrate: Math.round(output.bitrate), // kbps
 				})
 				.run()
 

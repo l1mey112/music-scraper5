@@ -230,14 +230,14 @@ export function queue_dispatch_later(cmd: QueueCmd, payload: any, target: Ident,
 		.run()
 } */
 
-export function if_not_exists<T>(table: SQLiteTable, cond: SQL) {
+export function not_exists<T>(table: SQLiteTable, cond: SQL) {
 	return db.select({ _: sql`1` })
 		.from(table)
 		.where(cond)
 		.get() === undefined
 }
 
-function has_any_data(data: any): boolean {
+function object_has_any(data: any): boolean {
 	if (typeof data !== 'object') {
 		return false
 	}
@@ -292,7 +292,7 @@ export function get_ident_or_new<T extends ArticleKind>(foreign_id: string, fore
 
 	const naux = (aux ?? {}) as KindToEntry[T]
 
-	if (has_any_data(aux)) {
+	if (object_has_any(aux)) {
 		db.insert(pk_table)
 			.values({ ...naux, id: data[1] })
 			.onConflictDoUpdate({
@@ -426,14 +426,21 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 			.where(sql`id = ${id2}`)
 			.run()
 
-		// upsert
-		db.insert(primary)
-			.values({ ...merged_obj, id: id1 })
-			.onConflictDoUpdate({
-				target: sql`${primary}."id"`,
-				set: merged_obj,
-			})
-			.run()
+		if (object_has_any(merged_obj)) {
+			// upsert
+			db.insert(primary)
+				.values({ ...merged_obj, id: id1 })
+				.onConflictDoUpdate({
+					target: sql`${primary}."id"`,
+					set: merged_obj,
+				})
+				.run()
+		} else {
+			db.insert(primary)
+				.values({ id: id1 })
+				.onConflictDoNothing()
+				.run()
+		}
 	})
 }
 

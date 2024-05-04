@@ -5,7 +5,7 @@ import { pass_track_merge_using_known_heuristics } from "./passes/merge_track"
 import { pass_album_index_spotify_album, pass_artist_index_spotify_artist, pass_aux_assign_album_spotify_artist, pass_aux_assign_album_spotify_track, pass_aux_assign_track_spotify_artist, pass_track_index_spotify_track } from "./passes/spotify"
 import { pass_source_download_from_spotify_track } from "./passes/spotify_download"
 import { pass_aux_spotify_artist0 } from "./passes/spotify_raw"
-import { pass_aux_assign_track_youtube_channel, pass_aux_youtube_channel0, pass_artist_index_youtube_channel, pass_track_index_youtube_video } from "./passes/youtube"
+import { pass_aux_assign_track_youtube_channel, pass_aux_youtube_channel0, pass_artist_index_youtube_channel, pass_track_index_youtube_video, pass_aux_index_youtube_playlist } from "./passes/youtube"
 import { pass_source_download_from_youtube_video } from "./passes/youtube_download"
 import { KV, MaybePromise, QueueEntry, static_assert, type_extends } from "./types"
 
@@ -35,6 +35,7 @@ type PassIdentifierList = [
 	'artist.index_spotify_artist',
 	'aux.assign_album_spotify_track',
 	'aux.spotify_artist0',
+	'aux.index_youtube_playlist',
 ]
 
 export type PassIdentifierPayload<T extends PassIdentifier> =
@@ -58,6 +59,7 @@ const passes_const = {
 	'artist.index_spotify_artist': { pass: pass_artist_index_spotify_artist },
 
 	// aux
+	'aux.index_youtube_playlist': { pass: pass_aux_index_youtube_playlist, settled: 'artist' },
 	'aux.assign_track_youtube_channel': { pass: pass_aux_assign_track_youtube_channel, settled: 'artist' },
 	'aux.assign_track_spotify_artist': { pass: pass_aux_assign_track_spotify_artist, settled: 'artist' },
 	'aux.assign_album_spotify_artist': { pass: pass_aux_assign_album_spotify_artist, settled: 'artist' },
