@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document</title>
+	<script src="htmx.js"></script>
+</head>
+<body>
+	<style>
+		body {
+			background-color: #1d1e1e;
+			width: 50rem;
+			height: 100vh;
+			word-wrap: break-word;
+			margin: 0 auto;
+			overflow: hidden;
+			display: flex;
+		}
+		html, pre, * {
+			font-family: 'Terminus (TTF)';
+			font-size: 16px;
+		}
+		p, pre, summary {
+			margin: 1px;
+			color: white;
+		}
+		.splitter {
+			width: 1px;
+			background-color: #2d2e2e;
+		}
+		.enclosure {
+			flex: 1;
+			padding: 1em;
+			overflow-y: auto;
+		}
+		.box {
+			background-color: #2d2e2e;
+			padding: 5px;
+			margin-bottom: 1em;
+		}
+		/* .log {} */
+		.warn {
+			background-color: #ae6a11;
+		}
+		.error {
+			background-color: #941e1e;
+		}
+		.prog {
+			height: 2px;
+			background: linear-gradient(to right, #d32f2f, #f57c00, #ffeb3b, #4caf50);
+			background-size: 400% 400%;
+			animation: progress-animation 5s ease infinite;
+		}
+		.tooltip {
+			border-bottom: 1px dotted black;
+			cursor: pointer;
+		}
+		/* doesn't work for long logs?? */
+		pre {
+			white-space: pre-wrap;       /* Since CSS 2.1 */
+			white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+			white-space: -pre-wrap;      /* Opera 4-6 */
+			white-space: -o-pre-wrap;    /* Opera 7 */
+			word-wrap: break-word;       /* Internet Explorer 5.5+ */
+		}
+		@keyframes progress-animation {
+			0% {
+				background-position: 0% 50%;
+			}
+			50% {
+				background-position: 100% 50%;
+			}
+			100% {
+				background-position: 0% 50%;
+			}
+		}
+		table {
+			color: white;
+			border: 1px solid white;
+			border-collapse: collapse;
+		}
+		th, td {
+			padding: 5px;
+			border: 1px solid white;
+		}
+		button, input[type="submit"], input, select {
+			border-color: rgb(48, 52, 54);
+			background-color: #1d1e1e;
+			color: white;
+			border: 1px solid white;
+			cursor: pointer;
+		}
+		input[type=checkbox] {
+			word-break: keep-all;
+			display: none;
+		}
+		input[type=checkbox] + label:before {
+			cursor: pointer;
+			content: '[ ] ';
+		}
+		input[type=checkbox]:checked + label:before {
+			content: '[x] ';
+		}
+		.flex-container {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-between;
+		}
+		.flex-box {
+			flex-basis: calc(33.33%); /* Set the initial width and height of the boxes */
+			aspect-ratio: 1/1; /* Set the aspect ratio to 1:1 to make the boxes square */
+			background-color: #f1f1f1;
+			text-align: center;
+		}
+		.flex-box img {
+			max-width: 100%;
+			max-height: 100%;
+			height: auto;
+			object-fit: contain;
+			padding: 10px;
+		}
+		/* me.l-m.dev */
+		article {
+			background-color: rgb(33, 31, 32);
+			border: solid 2px rgb(130, 122, 111);
+			padding: 0.5em;
+			margin: 0.5em;
+			display: flex;
+			align-items: center;
+			width: 100%;
+		}
+		header {
+			color: grey;
+			flex-grow: 1;
+		}
+		article div {
+			margin-left: 1em;
+		}
+		article div img {
+			height: 85px;
+			object-fit: cover;
+		}
+		a {
+			all: unset;
+		}
+	</style>
+</head>
+<body>
+	<div class="enclosure">
+		<div class="box">
+			<div id="search-container">
+				<form hx-target="#search-results">
+					<input type="search" name="search" placeholder="Search..."
+						hx-trigger="input changed delay:100ms, search, load"
+						hx-post="/search">
+					<select hx-trigger="input" hx-post="/search" name="kind">
+						<option value="track">Track</option>
+						<option value="track_by_artists">Track By Artists</option>
+						<option value="album">Album</option>
+						<option value="artist">Artist</option>
+						<option value="ident">Ident</option>
+					</select>
+				</form>
+			</div>
+		</div>
+		<div id="search-results" class="flex-container">
+		</div>
+	</div>
+</body>
+</html>
