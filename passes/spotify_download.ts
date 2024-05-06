@@ -1,4 +1,4 @@
-import { $ } from "bun"
+import { $, ShellError } from "bun"
 import { pass_zotify_credentials } from "../cred"
 import { fs_media, fs_sharded_path_noext_nonlazy } from "../fs"
 import { FSRef, QueueEntry } from "../types"
@@ -19,7 +19,7 @@ const can_download_source = sqlite.prepare<number, [string]>(`
 export function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
 	const [username, password] = pass_zotify_credentials()
 
-	return run_with_concurrency_limit(entries, 20, async (entry) => {
+	return run_with_concurrency_limit(entries, 8, async (entry) => {
 		const spotify_id = entry.payload
 		const [_, track_id] = get_ident(spotify_id, $spotify_track, 'track_id')
 
@@ -47,6 +47,18 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 				throw new Error(sh.stderr.toString())
 			}
 		} catch (e) {
+			// python catches SIGINT for us (non-propagation) and returns 130
+			// this process has to die as intended
+
+			// if KeyboardInterrupt is left unhandled, it should reraise the signal, but python doesn't do that
+			// probably for selfish cosmetic reasons - python doesn't play nice when embedded
+
+			// TODO: ShellError doesn't exist.
+			//       even though its defined as a class, you can only use it as a type
+			if ((e as object).hasOwnProperty('exitCode') && (e as ShellError).exitCode == 130) {
+				process.kill(process.pid, "SIGINT")
+			}
+
 			console.error('failed to download track', spotify_id)
 			console.error(e)
 			queue_retry_failed(entry)

@@ -50,23 +50,26 @@ type _ = static_assert<type_extends<PassIdentifierList, PassIdentifierTemplate[]
 
 const passes_const = {
 	'track.index_youtube_video': { pass: pass_track_index_youtube_video },
+
 	'artist.index_youtube_channel': { pass: pass_artist_index_youtube_channel },
-	'source.download_from_youtube_video': { pass: pass_source_download_from_youtube_video },
-	'source.classify_chromaprint': { pass: pass_source_classify_chromaprint },
-	'image.download_image_url': { pass: pass_image_download_image_url },
-	'source.download_from_spotify_track': { pass: pass_source_download_from_spotify_track },
+	'aux.youtube_channel0': { pass: pass_aux_youtube_channel0 },
+	'aux.index_youtube_playlist': { pass: pass_aux_index_youtube_playlist, settled: 'artist' },
+	'aux.assign_track_youtube_channel': { pass: pass_aux_assign_track_youtube_channel, settled: 'artist' },	
+
 	'track.index_spotify_track': { pass: pass_track_index_spotify_track },
 	'album.index_spotify_album': { pass: pass_album_index_spotify_album },
 	'artist.index_spotify_artist': { pass: pass_artist_index_spotify_artist },
-
-	// aux
-	'aux.index_spotify_liked': { pass: pass_aux_index_spotify_liked },
-	'aux.index_youtube_playlist': { pass: pass_aux_index_youtube_playlist, settled: 'artist' },
-	'aux.assign_track_youtube_channel': { pass: pass_aux_assign_track_youtube_channel, settled: 'artist' },
+	'aux.spotify_artist0': { pass: pass_aux_spotify_artist0 },
 	'aux.assign_track_spotify_artist': { pass: pass_aux_assign_track_spotify_artist, settled: 'artist' },
 	'aux.assign_album_spotify_track': { pass: pass_aux_assign_album_spotify_track, settled: 'track' },
-	'aux.youtube_channel0': { pass: pass_aux_youtube_channel0 },
-	'aux.spotify_artist0': { pass: pass_aux_spotify_artist0 },
+
+	'image.download_image_url': { pass: pass_image_download_image_url },
+	'source.classify_chromaprint': { pass: pass_source_classify_chromaprint },
+
+	'aux.index_spotify_liked': { pass: pass_aux_index_spotify_liked },
+
+	'source.download_from_spotify_track': { pass: pass_source_download_from_spotify_track },
+	'source.download_from_youtube_video': { pass: pass_source_download_from_youtube_video },
 } as const satisfies Record<PassIdentifier, PassDesc>
 
 type PassSettledDesc = {

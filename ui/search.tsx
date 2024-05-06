@@ -1,8 +1,13 @@
 import { sqlite } from "../db"
 import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Locale, TrackId, image_kind_tostring } from "../types"
 import { assert, ident_classify, ident_classify_fallable, ident_id, ident_make } from "../pass_misc"
-import { locale_current } from "../locale"
 import { snowflake_timestamp } from "../ids"
+
+const user_selections = {
+	track: new Set<TrackId>(),
+	album: new Set<AlbumId>(),
+	artist: new Set<ArtistId>(),
+}
 
 type Kind = 'track' | 'track_by_artists' | 'album' | 'artist' | 'ident'
 
@@ -16,7 +21,7 @@ function select_from<T extends 'track' | 'album' | 'artist'>(kind: T) {
 	const query_empty = sqlite.prepare<{ id: ArticleMap[T] }, []>(`
 		select id
 		from ${kind}
-		order by id
+		order by id desc
 		limit 100
 	`)
 
@@ -32,7 +37,7 @@ function select_from<T extends 'track' | 'album' | 'artist'>(kind: T) {
 		select distinct ident
 		from locale
 		where ident glob '${ident_map[kind]}*' and text like ? and desc = 0
-		order by ident
+		order by ident desc
 		limit 100
 	`)
 
