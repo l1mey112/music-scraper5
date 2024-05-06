@@ -2,7 +2,7 @@ import { pass_source_classify_chromaprint } from "./passes/chromaprint"
 import { pass_image_download_image_url } from "./passes/image"
 import { pass_link_classify_link_shorteners, pass_link_classify_weak } from "./passes/link"
 import { pass_track_merge_using_known_heuristics } from "./passes/merge_track"
-import { pass_album_index_spotify_album, pass_artist_index_spotify_artist, pass_aux_assign_album_spotify_artist, pass_aux_assign_album_spotify_track, pass_aux_assign_track_spotify_artist, pass_track_index_spotify_track } from "./passes/spotify"
+import { pass_album_index_spotify_album, pass_artist_index_spotify_artist, pass_aux_assign_album_spotify_track, pass_aux_assign_track_spotify_artist, pass_track_index_spotify_track } from "./passes/spotify"
 import { pass_source_download_from_spotify_track } from "./passes/spotify_download"
 import { pass_aux_index_spotify_liked } from "./passes/spotify_liked"
 import { pass_aux_spotify_artist0 } from "./passes/spotify_raw"
@@ -30,7 +30,6 @@ type PassIdentifierList = [
 	'source.classify_chromaprint',
 	'image.download_image_url',
 	'aux.assign_track_spotify_artist',
-	'aux.assign_album_spotify_artist',
 	'track.index_spotify_track',
 	'album.index_spotify_album',
 	'artist.index_spotify_artist',
@@ -65,7 +64,6 @@ const passes_const = {
 	'aux.index_youtube_playlist': { pass: pass_aux_index_youtube_playlist, settled: 'artist' },
 	'aux.assign_track_youtube_channel': { pass: pass_aux_assign_track_youtube_channel, settled: 'artist' },
 	'aux.assign_track_spotify_artist': { pass: pass_aux_assign_track_spotify_artist, settled: 'artist' },
-	'aux.assign_album_spotify_artist': { pass: pass_aux_assign_album_spotify_artist, settled: 'artist' },
 	'aux.assign_album_spotify_track': { pass: pass_aux_assign_album_spotify_track, settled: 'track' },
 	'aux.youtube_channel0': { pass: pass_aux_youtube_channel0 },
 	'aux.spotify_artist0': { pass: pass_aux_spotify_artist0 },

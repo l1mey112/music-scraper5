@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, statSync } from "fs"
 import { realpathSync } from "fs"
 import { FSRef } from "./types"
 import { BunFile } from "bun"
-import { shard_id } from "./ids"
+import { shard_id, shard_part } from "./ids"
 
 function assert_directory(path: string, kind: string) {
 	if (!existsSync(path)) {
@@ -21,8 +21,7 @@ assert_directory(fs_root, "root")
 assert_directory(fs_media, "media")
 
 export function fs_hash_path(hash: FSRef): string {
-	const shard = (hash as unknown as string).slice(0, 2)
-	return `${fs_media}/${shard}/${hash}`
+	return `${fs_media}/${shard_part(hash)}/${hash}`
 }
 
 export function fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {
@@ -32,17 +31,15 @@ export function fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {
 
 export function fs_sharded_path(dot_ext: string): [string, FSRef] {
 	const hash = (shard_id() + dot_ext) as FSRef
-	const shard = hash.slice(0, 2)
-
 	// bun automatically creates folders
-	return [`${fs_media}/${shard}/${hash}`, hash]
+	return [`${fs_media}/${shard_part(hash)}/${hash}`, hash]
 }
 
 // append your own extension
 // creates the shard folder
 export function fs_sharded_path_noext_nonlazy(): [string, string] {
-	const hash = String(shard_id())
-	const shard = hash.slice(0, 2)
+	const hash = shard_id()
+	const shard = shard_part(hash)
 
 	mkdirSync(`${fs_media}/${shard}`, { recursive: true })
 
@@ -51,7 +48,7 @@ export function fs_sharded_path_noext_nonlazy(): [string, string] {
 
 export function fs_sharded_path_nonlazy(dot_ext: string): [string, FSRef] {
 	const hash = (shard_id() + dot_ext) as FSRef
-	const shard = hash.slice(0, 2)
+	const shard = shard_part(hash)
 
 	mkdirSync(`${fs_media}/${shard}`, { recursive: true })
 

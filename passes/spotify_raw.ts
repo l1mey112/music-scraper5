@@ -78,7 +78,7 @@ export function pass_aux_spotify_artist0(entries: QueueEntry<string>[]) {
 				const largest: SpotifyImage | undefined = data.header_images.reduce((a, b) => a.width * a.height > b.width * b.height ? a : b)
 
 				if (largest) {
-					image_queue_immutable_url(ident, ImageKind["Spotify Artist Banner"], largest.url)
+					image_queue_immutable_url(ident, ImageKind["Spotify Artist Banner"], largest.url, false)
 				}
 			}
 

@@ -14,3 +14,7 @@ rm -f root/db.sqlite root/db.sqlite-shm root/db.sqlite-wal
 bun run drizzle-kit generate:sqlite
 HEAD=`ls -aht migrations/*.sql | head -1`
 sh/post.py schema.ts $HEAD | sqlite3 root/db.sqlite
+
+if [ -f sh/.dump.sh ]; then
+	sh/.dump.sh
+fi

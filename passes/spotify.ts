@@ -2,7 +2,7 @@ import { pass_spotify_api } from "../cred"
 import { db } from "../db"
 import { AlbumId, ArtistId, ImageKind, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { $spotify_album, $spotify_artist, $spotify_track } from "../schema"
-import { get_ident, get_ident_or_new, not_exists, image_queue_immutable_url, insert_album_artist, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
+import { get_ident, get_ident_or_new, not_exists, image_queue_immutable_url, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
 import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { sql } from "drizzle-orm"
 
@@ -22,16 +22,6 @@ export function pass_aux_assign_album_spotify_track(entries: QueueEntry<[AlbumId
 		const [album_id, spotify_track] = entry.payload
 		const [_, track_id] = get_ident(spotify_track, $spotify_track, 'track_id')
 		insert_album_track(album_id, track_id)
-		queue_complete(entry)
-	}
-}
-
-// aux.assign_album_spotify_artist
-export function pass_aux_assign_album_spotify_artist(entries: QueueEntry<[AlbumId, spotify_artist: string]>[]) {
-	for (const entry of entries) {
-		const [album_id, spotify_artist] = entry.payload
-		const [_, artist_id] = get_ident(spotify_artist, $spotify_artist, 'artist_id')
-		insert_album_artist(album_id, artist_id)
 		queue_complete(entry)
 	}
 }
@@ -144,7 +134,6 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 				if (not_exists($spotify_artist, sql`id = ${artist.id}`)) {
 					queue_dispatch_immediate('artist.index_spotify_artist', artist.id)
 				}
-				queue_dispatch_immediate('aux.assign_album_spotify_artist', [album_id, artist.id])
 			}
 
 			locale_insert(name)
@@ -154,7 +143,7 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 			//       but we do anyway. its the users choice at the end of the day
 			const largest = album.images[0]
 			if (largest) {
-				image_queue_immutable_url(ident, ImageKind["Cover Art"], largest.url)
+				image_queue_immutable_url(ident, ImageKind["Cover Art"], largest.url, true)
 			}
 
 			insert_canonical($spotify_album, album.id, spotify_id, {
@@ -202,7 +191,7 @@ export function pass_artist_index_spotify_artist(entries: QueueEntry<string>[]) 
 			// > The cover art for the artist in various sizes, widest first.
 			const largest = artist.images[0]
 			if (largest) {
-				image_queue_immutable_url(ident, ImageKind["Profile Art"], largest.url)
+				image_queue_immutable_url(ident, ImageKind["Profile Art"], largest.url, true)
 			}
 
 			insert_canonical($spotify_artist, artist.id, spotify_id, {

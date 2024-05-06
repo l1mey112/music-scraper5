@@ -28,16 +28,27 @@ export type FSRef = NewType<'FSRef', string>
 type IdentComponents = `tr${string}` | `al${string}` | `ar${string}`
 export type Ident = NewType<'Ident', IdentComponents>
 
+// order by imagekind asc for most preferred kind to represent a piece of media
 export type ImageKind = typeof ImageKind[keyof typeof ImageKind]
 export const ImageKind = Object.freeze({
-	['YouTube Thumbnail']: 0,
-	['YouTube Banner']: 1,
+	['Cover Art']: 0,
+	['Profile Art']: 1,
+	['YouTube Thumbnail']: 2,
+	['YouTube Banner']: 3,
 	//['YouTube TV Banner']: 2,
 	//['YouTube Mobile Banner']: 3,
 	['Spotify Artist Banner']: 4,
-	['Cover Art']: 5,
-	['Profile Art']: 6,
 })
+
+export function image_kind_tostring(kind: ImageKind): string {
+	for (const [k, v] of Object.entries(ImageKind)) {
+		if (v === kind) {
+			return k
+		}
+	}
+
+	return 'Unknown Image Kind'
+}
 
 // see locale.ts
 // Locale is a IETF language subtag (e.g. en, jp)

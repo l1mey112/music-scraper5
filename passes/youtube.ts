@@ -124,7 +124,7 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 			const links = links_from_text(ident, video.description)
 
 			if (thumb) {
-				image_queue_immutable_url(ident, ImageKind["YouTube Thumbnail"], thumb.url)
+				image_queue_immutable_url(ident, ImageKind["YouTube Thumbnail"], thumb.url, false)
 			}
 
 			insert_canonical($youtube_video, video.id, youtube_id, {
@@ -177,11 +177,11 @@ export function pass_artist_index_youtube_channel(entries: QueueEntry<string>[])
 				if (!images) {
 					continue
 				}
-	
+
 				const thumb = largest_image(images)
-	
+
 				if (thumb) {
-					image_queue_immutable_url(ident, kind, thumb.url)
+					image_queue_immutable_url(ident, kind, thumb.url, false)
 				}
 			}
 

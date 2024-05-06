@@ -10,9 +10,9 @@ import { Ident, ImageKind, QueueEntry } from '../types'
 import sizeOf from 'image-size'
 
 // image.download_image_url
-export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageKind, url: string]>[]) {
+export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageKind, url: string, preferred: boolean]>[]) {
 	return run_with_concurrency_limit(entries, 32, async (entry) => {
-		const [ident, image_kind, url] = entry.payload
+		const [ident, image_kind, url, preferred] = entry.payload
 
 		const resp = await nfetch(url)
 
@@ -50,7 +50,7 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 			}
 
 			db.insert($image)
-				.values({ hash: new_hash, ident, kind: image_kind, width: size.width, height: size.height })
+				.values({ hash: new_hash, ident, kind: image_kind, width: size.width, height: size.height, preferred })
 				.run()
 
 			queue_complete(entry)

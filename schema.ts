@@ -31,17 +31,6 @@ export const $track_artist = sqliteTable('track_artist', {
 	unq: unique('track_artist.unq').on(t.track_id, t.artist_id),
 }))
 
-export const $album_artist = sqliteTable('album_artist', {
-	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
-	album_id: integer('album_id').$type<AlbumId>().notNull(),
-	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
-
-	// role, etc
-}, (t) => ({
-	idx0: index('album_artist.idx0').on(t.album_id, t.id, t.artist_id),
-	unq: unique('album_artist.unq').on(t.album_id, t.artist_id),
-}))
-
 export const $album_track = sqliteTable('album_track', {
 	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
 	album_id: integer('album_id').$type<AlbumId>().notNull(),
@@ -121,7 +110,7 @@ export const $locale = sqliteTable('locale', {
 	desc: integer('desc').$type<LocaleDesc>().notNull(),
 	text: text('text').notNull(),
 }, (t) => ({
-	idx0: index('locale.idx0').on(t.ident),
+	idx0: index('locale.searching_idx').on(t.ident, t.text, t.desc),
 	uniq: unique('locale.uniq').on(t.locale, t.desc, t.text),
 }))
 
@@ -141,6 +130,7 @@ export const $queue = sqliteTable('queue', {
 // WITHOUT-ROWID: image
 export const $image = sqliteTable('image', {
 	hash: text('hash').$type<FSRef>().primaryKey(),
+	preferred: integer('preferred', { mode: 'boolean' }).notNull(),
 	ident: text('ident').$type<Ident>().notNull(),
 	kind: integer('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),

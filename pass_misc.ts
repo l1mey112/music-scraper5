@@ -1,7 +1,7 @@
 import { InferInsertModel, SQL, sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
-import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_artist, $album_track, $image, $source } from "./schema"
-import { snowflake } from "./ids"
+import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_track, $image, $source } from "./schema"
+import { snowflake_id } from "./ids"
 import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
@@ -284,7 +284,7 @@ export function get_ident_or_new<T extends ArticleKind>(foreign_id: string, fore
 	}
 
 	if (!data) {
-		const id = snowflake() as KindToId[T]
+		const id = snowflake_id() as KindToId[T]
 		data = [ident_make(id, kind), id]
 	}
 
@@ -345,7 +345,7 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 		case 'album_id': {
 			primary = $album
 			migration_tables_id = [
-				$album_artist, $album_track,
+				$album_track,
 				$spotify_album,
 			]
 			break
@@ -353,7 +353,7 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 		case 'artist_id': {
 			primary = $artist
 			migration_tables_id = [
-				$track_artist, $album_artist,
+				$track_artist,
 				$spotify_artist,
 				$youtube_channel,
 			]
@@ -577,21 +577,6 @@ export function insert_track_artist(track_id: TrackId, artist_id: ArtistId | Art
 		.run()
 }
 
-export function insert_album_artist(album_id: AlbumId, artist_id: ArtistId | ArtistId[]) {
-	let values
-
-	if (!(artist_id instanceof Array)) {
-		values = [{ album_id, artist_id }]
-	} else {
-		values = artist_id.map(artist_id => ({ album_id, artist_id }))
-	}
-
-	db.insert($album_artist)
-		.values(values)
-		.onConflictDoNothing()
-		.run()
-}
-
 export function insert_album_track(album_id: AlbumId, track_id: TrackId | TrackId[]) {
 	let values
 
@@ -629,10 +614,39 @@ export function ident_id<T extends TrackId | AlbumId | ArtistId>(id: Ident): T {
 	return Number(id.slice(2)) as T
 }
 
+export function ident_classify(ident: Ident | string): ArticleKind {
+	assert(ident.length >= 3)
+	switch (ident.slice(0, 2)) {
+		case 'tr':
+			return 'track_id'
+		case 'al':
+			return 'album_id'
+		case 'ar':
+			return 'artist_id'
+	}
+	assert(false, 'unreachable')
+}
+
+export function ident_classify_fallable(ident: Ident | string): ArticleKind | undefined {
+	// tr<number>
+	if (ident.length < 3) {
+		return
+	}
+	
+	switch (ident.slice(0, 2)) {
+		case 'tr':
+			return 'track_id'
+		case 'al':
+			return 'album_id'
+		case 'ar':
+			return 'artist_id'
+	}
+}
+
 // inserts [ImageKind, string] into the queue
 // it is in an array/tuple for deterministic JSON.stringify etc
-export function image_queue_immutable_url(ident: Ident, kind: ImageKind, url: string) {
-	queue_dispatch_immediate('image.download_image_url', [ident, kind, url])
+export function image_queue_immutable_url(ident: Ident, kind: ImageKind, url: string, preferred: boolean) {
+	queue_dispatch_immediate('image.download_image_url', [ident, kind, url, preferred])
 }
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）

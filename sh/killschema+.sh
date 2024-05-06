@@ -18,7 +18,3 @@ cmds=(
 )
 
 sh/queue_imm.ts "${cmds[@]}"
-
-if [ -f sh/.dump.sh ]; then
-	sh/.dump.sh
-fi

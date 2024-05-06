@@ -1,4 +1,5 @@
-import { Snowflake } from "./types"
+import { decodeTime, monotonicFactory } from "ulid"
+import { FSRef, Snowflake } from "./types"
 
 const epoch = 0 /* +Date.UTC(1970, 0, 1) */
 
@@ -52,7 +53,7 @@ let sequence = 0
 // i doubt this matters, we're just chopping the bits anyway
 // sources say that it is 2^53 exactly, so which is it?
 
-export function snowflake(): Snowflake {
+export function snowflake_id(): Snowflake {
 	const now = Date.now()
 
 	if (last_timestamp !== now) {
@@ -60,7 +61,7 @@ export function snowflake(): Snowflake {
 		last_timestamp = now
 	} else if (sequence == 32) {
 		Bun.sleepSync(1)
-		return snowflake()
+		return snowflake_id()
 	}
 	const seq = sequence++
 
@@ -73,18 +74,28 @@ export function snowflake_timestamp(snowflake: Snowflake): Date {
 	return new Date(Number(BigInt(snowflake) >> 5n) + epoch)
 }
 
-export function shard_id() {
-	const alph = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_="
-	const r = crypto.getRandomValues(new Uint8Array(20))
+// we are using ULIDs because it encodes timestamp and randomness just like the snowflake above
+// why aren't we just using ULIDs for the whole thing? probably just space, who knows? seems arbitrary
+// - https://github.com/ulid/spec
 
-	let ac = ""
+const ulid = monotonicFactory()
 
-	ac += alph[r[0] % 10]
-	ac += alph[r[1] % 10]
+export function shard_id(): string {
+	return ulid()
+}
 
-	for (let n = 2; n < 18; n++) {
-		ac += alph[63 & r[n]]
-	}
+//  01AN4Z07BY      79KA1307SR9X4MV3
+// 
+// |----------|    |----------------|
+//  Timestamp          Randomness
+//    48bits             80bits
 
-	return ac
+// extract 2 high entropy chars from the randomness
+export function shard_part(shard: FSRef | string): string {
+	return shard.slice(10, 12)
+}
+
+export function shard_timestamp(shard: FSRef | string): Date {
+	shard = shard.slice(0, 26) // reset length to 26
+	return new Date(decodeTime(shard))
 }
