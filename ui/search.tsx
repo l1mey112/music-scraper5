@@ -2,12 +2,9 @@ import { sqlite } from "../db"
 import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Locale, TrackId, image_kind_tostring } from "../types"
 import { assert, ident_classify, ident_classify_fallable, ident_id, ident_make } from "../pass_misc"
 import { snowflake_timestamp } from "../ids"
+import { send as htmx } from "./ui"
 
-const user_selections = {
-	track: new Set<TrackId>(),
-	album: new Set<AlbumId>(),
-	artist: new Set<ArtistId>(),
-}
+const selected = new Set<Ident>()
 
 type Kind = 'track' | 'track_by_artists' | 'album' | 'artist' | 'ident'
 
@@ -70,7 +67,20 @@ function name_from() {
 	`)
 
 	return (ident: Ident) => {
-		return locale_selection.get(ident)?.text ?? '[N/A]'
+		const row = locale_selection.get(ident)
+
+		if (!row) {
+			return '[NO NAME]'
+		}
+
+		let name = row.text
+
+		// edgy artists love zero width space
+		if (name.trim().replace(/[\u200B-\u200D\uFEFF]/g, '') === '') {
+			name = '[EMPTY NAME]'
+		}
+
+		return name
 	}
 }
 
@@ -144,10 +154,37 @@ function ident_exists_from() {
 	}
 }
 
+function unwrap_artists_media_from() {
+	// from artist id, return all albums with artist inside and tracks with artist inside without album
+
+	const albums = sqlite.prepare<{ album_id: AlbumId }, [ArtistId]>(`
+		select distinct a.album_id
+		from album_track a
+		join track_artist ta on a.track_id = ta.track_id
+		where ta.artist_id = ?
+	`)
+
+	const tracks = sqlite.prepare<{ track_id: TrackId }, [ArtistId]>(`
+		select t.id as track_id
+		from track t
+		left join album_track at on t.id = at.track_id
+		join track_artist ta on t.id = ta.track_id
+		where ta.artist_id = ? and at.id is null
+	`)
+
+	return (artist: ArtistId) => {
+		const album_ids = albums.all(artist).map(it => it.album_id)
+		const track_ids = tracks.all(artist).map(it => it.track_id)
+
+		return { album_ids, track_ids }
+	}
+}
+
 const name_search = name_from()
 const image_search = image_from()
 const track_artist_search = track_artist_from()
 const ident_exists = ident_exists_from()
+const unwrap_artists_media = unwrap_artists_media_from()
 
 const track_search = select_from('track')
 const album_search = select_from('album')
@@ -160,14 +197,18 @@ const artist_search = select_from('artist')
 // preview audio
 // collaborators on the piece of media
 
+function tooltip_ident(ident: Ident, text: string) {
+	return <a hx-target="#search-results" hx-post="/search" hx-vals={`{"search":"${ident}","kind":"ident"}`}><span class="tooltip" data-tooltip title={ident}>{text}</span></a>
+}
+
 function Box({ ident }: { ident: Ident }) {
-	const id = ident_id(ident)	
+	const id = ident_id(ident)
 	const date = snowflake_timestamp(id)
-	const name = name_search(ident)
+	let name = name_search(ident)
 	const image = image_search(ident)
 
 	const kind = ident_classify(ident)
-	
+
 	// return <div class="box">name: {name(ident)}</div>
 	// name on left, everything else on right
 	// use float
@@ -177,10 +218,6 @@ function Box({ ident }: { ident: Ident }) {
 		image_html = <img loading="lazy" src={`/media?q=${image.hash}`} alt={image_kind_tostring(image.kind)} />
 	} else {
 		image_html = <pre style="padding: 1em;" >No Image</pre>
-	}
-
-	function tooltip_ident(ident: Ident, text: string) {
-		return <a hx-target="#search-results" hx-post="/search" hx-vals={`{"search":"${ident}","kind":"ident"}`}><span class="tooltip" data-tooltip title={ident}>{text}</span></a>
 	}
 
 	let collaborators_elem: JSX.Element | undefined
@@ -196,8 +233,8 @@ function Box({ ident }: { ident: Ident }) {
 
 		collaborators_elem = <pre>{collaborators_html.join(', ')}</pre>
 	} else if (kind == 'album_id') {
-		let collaborators = album_track_from()(ident_id<AlbumId>(ident))
-		let collaborators_html: JSX.Element[] = []
+		const collaborators = album_track_from()(ident_id<AlbumId>(ident))
+		const collaborators_html: JSX.Element[] = []
 
 		// 1. name2
 		// 2. name1
@@ -209,12 +246,13 @@ function Box({ ident }: { ident: Ident }) {
 		collaborators_elem = <>{...collaborators_html}</>
 	}
 
-	return <article>
+	const is_selected = selected.has(ident)
+	const invert_vals = is_selected ? `{"ident":"${ident}"}` : `{"ident":"${ident}","state":"on"}`
+	return <article class={is_selected ? 'selected' : ''} id={ident}>
 		<header>
-			<pre>{name}</pre>
+			<pre hx-post="/select" hx-swap="none" hx-vals={invert_vals} hx-trigger="click" style="cursor: pointer;">{name}</pre>
 			<b>{ident} <span class="tooltip" data-tooltip title={date.toString()}>[?]</span></b>
-			<hr />
-			{collaborators_elem}
+			{collaborators_elem && <><hr />{collaborators_elem}</>}
 		</header>
 		<div>
 			{image_html}
@@ -222,7 +260,96 @@ function Box({ ident }: { ident: Ident }) {
 	</article>
 }
 
-export function route_search(search: string, kind: Kind): JSX.Element {
+let currently_building = false
+
+function unwrap_selected(): { albums: AlbumId[], singles: TrackId[] } {
+	const albums: AlbumId[] = []
+	const singles: TrackId[] = []
+
+	for (const ident of selected) {
+		const kind = ident_classify(ident)
+
+		switch (kind) {
+			case 'album_id': {
+				albums.push(ident_id<AlbumId>(ident))
+				break
+			}
+			case 'track_id': {
+				singles.push(ident_id<TrackId>(ident))
+				break
+			}
+			case 'artist_id': {
+				const { album_ids, track_ids } = unwrap_artists_media(ident_id<ArtistId>(ident))
+
+				albums.push(...album_ids)
+				singles.push(...track_ids)
+				break
+			}
+		}
+	}
+
+	return { albums, singles }
+}
+
+async function build(path: string) {
+	console.log(selected)
+	console.log(path)
+
+	const { albums, singles } = unwrap_selected()
+
+	console.log(albums, singles)
+}
+
+export function route_build(path: string) {
+	currently_building = true
+	htmx(Build())
+
+	build(path).then(() => {
+		currently_building = false
+		htmx(Build())
+	})
+}
+
+function Build() {
+	if (currently_building) {
+		return <div id="build"></div>
+	}
+
+	return <div id="build">
+		<hr />
+		<form hx-swap="none">
+			<input type="text" name="path" placeholder="path" minlength="1" required value="mnt2" />
+			<button type="button" hx-post="/build" hx-trigger="click">Build</button>
+		</form>
+	</div>
+}
+
+export function route_select(ident: Ident, state: boolean) {
+	if (state) {
+		selected.add(ident)
+	} else {
+		selected.delete(ident)
+	}
+
+	// rerender box
+	htmx(Box({ ident }))
+
+	function output_map(ident: Ident) {
+		const name = name_search(ident)
+		return <div class="nbox">{tooltip_ident(ident, name)}</div>
+	}
+
+	const output = <div id="select-results">
+		<div class="flex">
+			{...Array.from(selected).map(output_map)}
+		</div>
+		{Build()}
+	</div>
+
+	htmx(output)
+}
+
+export function route_search(search: string, kind: Kind) {
 	let idents: Ident[] = []
 
 	switch (kind) {
@@ -251,5 +378,9 @@ export function route_search(search: string, kind: Kind): JSX.Element {
 		}
 	}
 
-	return <>{...idents.map(ident => <Box ident={ident} />)}</>
+	const output = <div id="search-results" class="flex-container">
+		{...idents.map(ident => <Box ident={ident} />)}
+	</div>
+
+	htmx(output)
 }

@@ -37,7 +37,12 @@
 		.box {
 			background-color: #2d2e2e;
 			padding: 5px;
-			margin-bottom: 1em;
+			margin-bottom: 0.5em;
+		}
+		.nbox {
+			background-color: #2d2e2e;
+			padding: 5px;
+			margin: 4px;
 		}
 		/* .log {} */
 		.warn {
@@ -91,21 +96,13 @@
 			border: 1px solid white;
 			cursor: pointer;
 		}
-		input[type=checkbox] {
-			word-break: keep-all;
-			display: none;
-		}
-		input[type=checkbox] + label:before {
-			cursor: pointer;
-			content: '[ ] ';
-		}
-		input[type=checkbox]:checked + label:before {
-			content: '[x] ';
-		}
 		.flex-container {
 			display: flex;
 			flex-wrap: wrap;
 			justify-content: space-between;
+		}
+		.flex {
+			display: flex;
 		}
 		.flex-box {
 			flex-basis: calc(33.33%); /* Set the initial width and height of the boxes */
@@ -130,6 +127,10 @@
 			align-items: center;
 			width: 100%;
 		}
+		article.selected {
+			/* change border */
+			border: solid 2px rgb(115, 247, 71);
+		}
 		header {
 			color: grey;
 			flex-grow: 1;
@@ -146,11 +147,11 @@
 		}
 	</style>
 </head>
-<body>
+<body hx-ext="ws, remove-me" ws-connect="/ws">
 	<div class="enclosure">
 		<div class="box">
 			<div id="search-container">
-				<form hx-target="#search-results">
+				<form hx-swap="none">
 					<input type="search" name="search" placeholder="Search..."
 						hx-trigger="input changed delay:100ms, search, load"
 						hx-post="/search">
@@ -164,8 +165,14 @@
 				</form>
 			</div>
 		</div>
-		<div id="search-results" class="flex-container">
-		</div>
+		<div id="select-results" class="flex"></div>
+		<hr>
+		<div id="search-results" class="flex-container"></div>
 	</div>
+	<script>
+		addEventListener('htmx:error', function(event) {
+			location.reload()
+		});
+	</script>
 </body>
 </html>
