@@ -1,6 +1,6 @@
 // @ts-ignore - need this for autoreloads on edit
 import index from './index.html'
-import { route_build, route_search, route_select } from './search'
+import { route_build, route_merge, route_search, route_select } from './search'
 import { db_close } from '../db'
 import { FSRef, Ident } from '../types'
 import { fs_hash_path } from '../fs'
@@ -64,6 +64,10 @@ Bun.serve<undefined>({
 			case '/build': {
 				const data = await req.formData()
 				route_build(String(data.get('path')!))
+				return new Response(undefined, { status: 200 })
+			}
+			case '/merge': {
+				route_merge()
 				return new Response(undefined, { status: 200 })
 			}
 			case '/media': {

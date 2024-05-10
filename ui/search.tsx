@@ -302,26 +302,105 @@ async function build(path: string) {
 
 export function route_build(path: string) {
 	currently_building = true
-	htmx(Build())
+	htmx(BuildButton())
 
 	build(path).then(() => {
 		currently_building = false
-		htmx(Build())
+		htmx(BuildButton())
 	})
 }
 
-function Build() {
-	if (currently_building) {
-		return <div id="build"></div>
+function BuildButton(): [boolean, JSX.Element] {
+	if (currently_building || selected.size === 0) {
+		return [false, <div id="build"></div>]
 	}
 
-	return <div id="build">
-		<hr />
+	return [true, <div id="build">
 		<form hx-swap="none">
 			<input type="text" name="path" placeholder="path" minlength="1" required value="mnt2" />
 			<button type="button" hx-post="/build" hx-trigger="click">Build</button>
 		</form>
+	</div>]
+}
+
+export function route_merge() {
+	const idents = route_select_clear()
+	htmx(MergeButton()) // update
+
+	
+}
+
+function MergeButton(): [boolean, JSX.Element]  {
+	// must have at least 2 selected
+	// ident types must all be the same
+
+	unacceptable: {
+		if (currently_building) {
+			break unacceptable
+		}
+
+		if (selected.size < 2) {
+			break unacceptable
+		}
+
+		// check if they're all the same type
+
+		const array = Array.from(selected)
+		let kind = ident_classify(array[0])
+
+		for (let i = 1; i < array.length; i++) {
+			if (ident_classify(array[i]) !== kind) {
+				break unacceptable
+			}
+		}
+
+		// acceptable
+		return [true, <div id="merge">
+			<button type="button" hx-post="/merge" hx-trigger="click">Merge</button>
+		</div>]
+	}
+	return [false, <div id="merge"></div>]
+}
+
+function route_select_rendender() {
+
+	function output_map(ident: Ident) {
+		const name = name_search(ident)
+		return <div class="nbox">{tooltip_ident(ident, name)}</div>
+	}
+
+	// what an ugly solution
+	const [has_any0, b0] = BuildButton()
+	const [has_any1, b1] = MergeButton()
+	const has_any = (has_any0 || has_any1) ? true : undefined
+
+	const output = <div id="select-results">
+		<div class="flex">
+			{...Array.from(selected).map(output_map)}
+		</div>
+		{has_any && <>
+			<hr />
+			<div class="flex">
+				{b0}
+				{b1}
+			</div>
+		</>}
 	</div>
+
+	htmx(output)
+}
+
+function route_select_clear() {
+	const idents = [...selected]
+	selected.clear()
+
+	for (const ident of idents) {
+		htmx(Box({ ident })) // rerender
+	}
+
+	route_select_rendender()
+
+	return idents
 }
 
 export function route_select(ident: Ident, state: boolean) {
@@ -334,19 +413,7 @@ export function route_select(ident: Ident, state: boolean) {
 	// rerender box
 	htmx(Box({ ident }))
 
-	function output_map(ident: Ident) {
-		const name = name_search(ident)
-		return <div class="nbox">{tooltip_ident(ident, name)}</div>
-	}
-
-	const output = <div id="select-results">
-		<div class="flex">
-			{...Array.from(selected).map(output_map)}
-		</div>
-		{Build()}
-	</div>
-
-	htmx(output)
+	route_select_rendender()
 }
 
 export function route_search(search: string, kind: Kind) {

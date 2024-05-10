@@ -329,8 +329,8 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 		$external_links,
 	]
 
-	let primary
-	let migration_tables_id
+	let primary: SQLiteTable
+	let migration_tables_id: SQLiteTable[]
 
 	switch (kind) {
 		case 'track_id': {

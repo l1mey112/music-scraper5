@@ -12,7 +12,7 @@ export function pass_source_classify_chromaprint(entries: QueueEntry<FSRef>[]) {
 	return run_with_concurrency_limit(entries, 20, async (entry) => {
 		const hash = entry.payload
 
-		// defualt length is 120 seconds, 180 is fine
+		// default length is 120 seconds, 180 is fine
 		const fpcalc = await $`fpcalc -algorithm 2 -length 180 -raw -json ${fs_hash_path(hash)}`.quiet().nothrow()
 
 		type FpCalc = {
