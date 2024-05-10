@@ -11,6 +11,14 @@ export type KV<K extends keyof any, V> = Partial<Record<K, V>>
 export type static_assert<T extends true> = never
 export type type_extends<T, U> = T extends U ? true : false
 
+type Entries<T> = {
+	[K in keyof T]: [K, T[K]]
+}[keyof T][]
+  
+export function exhaustive_keyof<T>(obj: T): Entries<T> {
+	return Object.entries(obj as object) as any;
+}
+
 export type Snowflake = number
 
 // cannot have NewType<NewType<T>> as this results in `never`
@@ -49,10 +57,6 @@ export function image_kind_tostring(kind: ImageKind): string {
 
 	return 'Unknown Image Kind'
 }
-
-// see locale.ts
-// Locale is a IETF language subtag (e.g. en, jp)
-export type Locale = NewType<'Locale', string>
 
 export enum LocaleDesc {
 	name,
@@ -105,7 +109,7 @@ export type LinkEntry = {
 
 export type LocaleEntry = {
 	ident: Ident
-	locale?: Locale | null
+	locale?: Script | null
 	preferred: boolean
 	desc: LocaleDesc
 	text: string

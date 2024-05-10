@@ -1,5 +1,5 @@
 import { blob, index, integer, real, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Locale, LocaleDesc, PassHashed, QueueId, TrackId } from "./types";
+import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Link, Script, LocaleDesc, PassHashed, QueueId, TrackId } from "./types";
 
 export const $track = sqliteTable('track', {
 	id: integer('id').$type<TrackId>().primaryKey(),
@@ -105,13 +105,13 @@ export const $external_links = sqliteTable('external_links', {
 // same above goes for the locale table
 export const $locale = sqliteTable('locale', {
 	ident: text('ident').$type<Ident>().notNull(),
-	locale: text('locale').$type<Locale>(),
+	script: text('script').$type<Script>(),
 	preferred: integer('preferred', { mode: 'boolean' }).notNull(),
 	desc: integer('desc').$type<LocaleDesc>().notNull(),
 	text: text('text').notNull(),
 }, (t) => ({
 	idx0: index('locale.searching_idx').on(t.ident, t.text, t.desc),
-	uniq: unique('locale.uniq').on(t.locale, t.desc, t.text),
+	uniq: unique('locale.uniq').on(t.script, t.desc, t.text),
 }))
 
 // FIFO queue, 0 expiry means immediate. use `order by expiry asc`

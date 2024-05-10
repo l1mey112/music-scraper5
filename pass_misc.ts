@@ -522,9 +522,9 @@ export function locale_insert(locales: LocaleEntry | LocaleEntry[]) {
 	db.insert($locale)
 		.values(locales)
 		.onConflictDoUpdate({
-			target: [$locale.locale, $locale.desc, $locale.text],
+			target: [$locale.script, $locale.desc, $locale.text],
 			set: {
-				preferred: sql`${$locale.locale} or excluded.preferred`,
+				preferred: sql`${$locale.script} or excluded.preferred`,
 			}
 		})
 		.run()

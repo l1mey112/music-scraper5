@@ -1,13 +1,13 @@
 import { parse } from "bcp-47"
 import { db } from "./db"
 import { sql } from "drizzle-orm"
-import { Locale } from "./types"
+import { Script } from "./types"
 import { $kv_store } from "./schema"
 
 // Locale is a IETF language tag (e.g. en, jp, ja-latn)
 // only storing language and script, nothing else
 
-export function locale_from_bcp_47(code: string): Locale | undefined {
+export function locale_from_bcp_47(code: string): Script | undefined {
 	const k = parse(code)
 
 	if (!k.language) {
@@ -15,19 +15,19 @@ export function locale_from_bcp_47(code: string): Locale | undefined {
 	}
 
 	if (k.script) {
-		return `${k.language}-${k.script}` as Locale
+		return `${k.language}-${k.script}` as Script
 	}
 
-	return k.language as Locale
+	return k.language as Script
 }
 
-export function locale_script_equal(to: Locale, foreign: Locale): boolean {
+export function locale_script_equal(to: Script, foreign: Script): boolean {
 	if (to == foreign) {
 		return true
 	}
 	
-	const map: Record<string, Locale> = {
-		'ja-latn': 'en' as Locale,
+	const map: Record<string, Script> = {
+		'ja-latn': 'en' as Script,
 	}
 
 	const mapped = map[foreign]
@@ -39,11 +39,11 @@ export function locale_script_equal(to: Locale, foreign: Locale): boolean {
 	return false
 }
 
-let _locale_current: Locale | undefined
+let _locale_current: Script | undefined
 
 // default database locale is "en"
 // repeated calls to this function will return the same cached locale
-export function locale_current(): Locale {
+export function locale_current(): Script {
 	if (_locale_current) {
 		return _locale_current
 	}
@@ -51,7 +51,7 @@ export function locale_current(): Locale {
 	const locale_entry = db.select({ data: $kv_store.data })
 		.from($kv_store)
 		.where(sql`kind = 'locale'`)
-		.get() as { data: Locale } | undefined
+		.get() as { data: Script } | undefined
 
 	let locale
 		
@@ -61,7 +61,7 @@ export function locale_current(): Locale {
 			.values({ kind: 'locale', data: 'en' })
 			.run()
 
-		locale = 'en' as Locale
+		locale = 'en' as Script
 	} else {
 		locale = locale_entry.data
 	}
