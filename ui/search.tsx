@@ -1,12 +1,20 @@
 import { sqlite } from "../db"
 import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Script, TrackId, image_kind_tostring } from "../types"
-import { assert, ident_classify, ident_classify_fallable, ident_id, ident_make } from "../pass_misc"
+import { ArticleKind, assert, ident_classify, ident_classify_fallable, ident_id, ident_make, merge } from "../pass_misc"
 import { snowflake_timestamp } from "../ids"
 import { send as htmx } from "./ui"
 
 const selected = new Set<Ident>()
 
 type Kind = 'track' | 'track_by_artists' | 'album' | 'artist' | 'ident'
+
+function to_kind(kind: ArticleKind): Kind {
+	switch (kind) {
+		case 'track_id': return 'track'
+		case 'album_id': return 'album'
+		case 'artist_id': return 'artist'
+	}
+}
 
 type ArticleMap = {
 	track: TrackId
@@ -292,12 +300,8 @@ function unwrap_selected(): { albums: AlbumId[], singles: TrackId[] } {
 }
 
 async function build(path: string) {
-	console.log(selected)
-	console.log(path)
-
 	const { albums, singles } = unwrap_selected()
-
-	console.log(albums, singles)
+	console.log(path, albums, singles)
 }
 
 export function route_build(path: string) {
@@ -327,7 +331,19 @@ export function route_merge() {
 	const idents = route_select_clear()
 	htmx(MergeButton()) // update
 
-	
+	// unlikely to be needed, just sanity checks
+	assert(idents.length >= 2)
+	assert(idents.map<ArticleKind | undefined>(ident_classify).reduce((a, b) => a === b ? a : undefined) !== undefined)
+
+	const kind = ident_classify(idents[0])
+	assert(kind !== 'album_id')
+
+	for (let i = 1; i < idents.length; i++) {
+		merge(kind, ident_id(idents[0]), ident_id(idents[i]))
+	}
+
+	// artist -> artist_id
+	route_search('', to_kind(kind))
 }
 
 function MergeButton(): [boolean, JSX.Element]  {

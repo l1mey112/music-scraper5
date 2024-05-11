@@ -91,6 +91,8 @@ export const Link = Object.freeze({
 	['Linkfire Composite (lnk.to)']: 18, // composite `${string}/${string}`
 })
 
+export type Script = string // ???? whatever for now
+
 export type QueueEntry<T> = {
 	id: QueueId
 	pass: PassIdentifier

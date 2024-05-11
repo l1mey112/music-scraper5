@@ -251,7 +251,7 @@ function object_has_any(data: any): boolean {
 	return false
 }
 
-type ArticleKind = 'track_id' | 'album_id' | 'artist_id'
+export type ArticleKind = 'track_id' | 'album_id' | 'artist_id'
 
 type KindToId = {
 	track_id: TrackId
@@ -323,6 +323,8 @@ export function get_ident<T extends ArticleKind>(foreign_id: string, foreign_tab
 }
 
 export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: KindToId[T]) {
+	assert(kind !== 'album_id') // not implemented yet
+
 	const migration_tables_ident = [
 		$image,
 		$locale,
@@ -353,7 +355,7 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 		case 'artist_id': {
 			primary = $artist
 			migration_tables_id = [
-				$track_artist,
+				// $track_artist, (IMPLEMENTED BELOW)
 				$spotify_artist,
 				$youtube_channel,
 			]
@@ -369,6 +371,52 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 
 	// merge id2 into id1
 	db.transaction(db => {
+		if (kind === 'artist_id') {
+			// merge two artist ids together, preserving the order placing the resultant artist id FIRST
+
+			// track attribution result of merging two tracks:
+			// - cosMo@Bousou-P, 音街ウナ, Hatsune Miku, cosMo@暴走P
+
+			// result after naively merging the artists together
+			// - 音街ウナ, Hatsune Miku, cosMo@Bousou-P
+			// we don't want this there ^^^^^^^^^^^^^
+
+			// TODO: this is quite redundant, we're only matching on two things here
+			const mapping_ids = db.select({ id: $track_artist.id, track_id: $track_artist.track_id })
+				.from($track_artist)
+				.where(sql`artist_id = ${id1} or artist_id = ${id2}`)
+				.all()
+
+			// perform group by track_id, sqlite doesn't have aggregate array functions
+			const track_artist_grouped = new Map<TrackId, number[]>()
+			for (const i of mapping_ids) {
+				const arr = track_artist_grouped.get(i.track_id) ?? []
+				arr.push(i.id)
+				track_artist_grouped.set(i.track_id, arr)
+			}
+
+			console.log(track_artist_grouped)
+
+			for (const [_, mapping_ids] of track_artist_grouped) {
+				// sort by lowest first
+				mapping_ids.sort((a, b) => a - b)
+				const first_artist = mapping_ids.shift()
+
+				if (first_artist) {
+					db.update($track_artist)
+						.set({ artist_id: id1 as ArtistId })
+						.where(sql`id = ${first_artist}`)
+						.run()
+				}
+
+				for (const attribute_map of mapping_ids) {
+					db.delete($track_artist)
+						.where(sql`id = ${attribute_map}`)
+						.run()
+				}
+			}
+		}
+
 		for (const table of migration_tables_id) {
 			try {
 				db.update(table)
@@ -522,9 +570,9 @@ export function locale_insert(locales: LocaleEntry | LocaleEntry[]) {
 	db.insert($locale)
 		.values(locales)
 		.onConflictDoUpdate({
-			target: [$locale.script, $locale.desc, $locale.text],
+			target: [$locale.locale, $locale.desc, $locale.text],
 			set: {
-				preferred: sql`${$locale.script} or excluded.preferred`,
+				preferred: sql`${$locale.locale} or excluded.preferred`,
 			}
 		})
 		.run()
