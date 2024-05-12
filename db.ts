@@ -3,6 +3,7 @@ import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import { Database } from 'bun:sqlite'
 import * as schema from './schema'
 import { fs_sqlite } from './fs'
+import { atexit_last } from './atexit'
 
 export const sqlite: Database = new Database(fs_sqlite, { create: false, readwrite: true })
 
@@ -16,7 +17,7 @@ sqlite.loadExtension("./chromaprint") // chromaprint.c
 
 export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema, logger: false })
 
-export function db_close() {
+function db_close() {
 	sqlite.exec("pragma wal_checkpoint(TRUNCATE);") // checkpoint WAL
 	sqlite.exec("pragma vacuum;") // vacuum
 	sqlite.exec("pragma analysis_limit = 0;") // complete scan to generate sqlite_stat4
@@ -26,3 +27,5 @@ export function db_close() {
 	sqlite.close() // close the db
 	console.log('db: closed')
 }
+
+atexit_last(db_close)

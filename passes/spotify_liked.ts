@@ -48,9 +48,11 @@ export async function pass_aux_index_spotify_liked(entries: QueueEntry<0>[]) {
 	await run_with_concurrency_limit(offsets, 12, async offset => {
 		const tracks = await api.currentUser.tracks.savedTracks(50, offset)
 
-		for (const { track } of tracks.items) {
+		for (const { track, added_at } of tracks.items) {
+			const time = new Date(added_at).getTime()
+
 			if (not_exists($spotify_track, sql`id = ${track.id}`)) {
-				queue_dispatch_immediate('track.index_spotify_track', track.id)
+				queue_dispatch_immediate('track.index_spotify_track', track.id, time)
 			}
 		}
 	})

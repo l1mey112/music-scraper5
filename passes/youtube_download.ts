@@ -49,7 +49,17 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 		try {
 			output_s = await ytdl.execPromise(args)
 		} catch (e) {
-			console.log('source.download.from_youtube_video: caught', e)
+			no_log: {
+				if (e instanceof Error) {
+					if (e.message.includes('This video is only available to Music Premium members')) {
+						break no_log
+					}
+					if (e.message.includes('This live event will begin in a few moments.')) {
+						break no_log
+					}
+				}
+				console.log('source.download.from_youtube_video: caught', e)
+			}			
 			queue_retry_failed(entry)
 			return
 		}

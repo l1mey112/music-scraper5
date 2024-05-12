@@ -1,8 +1,9 @@
 import { sqlite } from "../db"
 import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Script, TrackId, image_kind_tostring } from "../types"
-import { ArticleKind, assert, ident_classify, ident_classify_fallable, ident_id, ident_make, merge } from "../pass_misc"
+import { ArticleKind, assert, ident_classify, ident_classify_fallable, ident_id, ident_make, merge, run_with_concurrency_limit } from "../pass_misc"
 import { snowflake_timestamp } from "../ids"
 import { send as htmx } from "./ui"
+import { build_album, build_single, ident_image_from, ident_name_from } from "../build"
 
 const selected = new Set<Ident>()
 
@@ -54,61 +55,6 @@ function select_from<T extends 'track' | 'album' | 'artist'>(kind: T) {
 			const like = `%${search.replaceAll(/\s+/g, '%')}%`
 
 			return query_search.all(like).map(it => it.ident)
-		}
-	}
-}
-
-function name_from() {
-	//const current_locale = locale_current()
-	// TODO: incorporate locale
-
-	const locale_selection = sqlite.prepare<{ text: string }, [Ident]>(`
-		select text from locale
-		where
-			ident = ?
-			and desc = 0
-			--and locale = (select locale from locale where locale = ? limit 1)
-			--or preferred = 1
-		order by
-			preferred desc
-		limit 1
-	`)
-
-	return (ident: Ident) => {
-		const row = locale_selection.get(ident)
-
-		if (!row) {
-			return '[NO NAME]'
-		}
-
-		let name = row.text
-
-		// edgy artists love zero width space
-		if (name.trim().replace(/[\u200B-\u200D\uFEFF]/g, '') === '') {
-			name = '[EMPTY NAME]'
-		}
-
-		return name
-	}
-}
-
-function image_from() {
-	const image_selection = sqlite.prepare<{ hash: FSRef, kind: ImageKind }, [Ident]>(`
-		select hash, kind from image
-		where ident = ?
-		order by
-			kind asc,
-			preferred desc,
-			hash
-		limit 1
-	`)
-
-	return (ident: Ident) => {
-		const res = image_selection.get(ident)
-		if (res) {
-			return res
-		} else {
-			return
 		}
 	}
 }
@@ -188,11 +134,10 @@ function unwrap_artists_media_from() {
 	}
 }
 
-const name_search = name_from()
-const image_search = image_from()
 const track_artist_search = track_artist_from()
 const ident_exists = ident_exists_from()
 const unwrap_artists_media = unwrap_artists_media_from()
+const album_track_search = album_track_from()
 
 const track_search = select_from('track')
 const album_search = select_from('album')
@@ -212,8 +157,8 @@ function tooltip_ident(ident: Ident, text: string) {
 function Box({ ident }: { ident: Ident }) {
 	const id = ident_id(ident)
 	const date = snowflake_timestamp(id)
-	let name = name_search(ident)
-	const image = image_search(ident)
+	let name = ident_name_from(ident)
+	const image = ident_image_from(ident)
 
 	const kind = ident_classify(ident)
 
@@ -235,20 +180,48 @@ function Box({ ident }: { ident: Ident }) {
 
 		// name2, name1
 		for (let i = 0; i < collaborators.length; i++) {
-			const name = name_search(collaborators[i])
+			const name = ident_name_from(collaborators[i])
 			collaborators_html.push(tooltip_ident(collaborators[i], name))
 		}
 
 		collaborators_elem = <pre>{collaborators_html.join(', ')}</pre>
 	} else if (kind == 'album_id') {
-		const collaborators = album_track_from()(ident_id<AlbumId>(ident))
+		const collaborators = album_track_search(ident_id<AlbumId>(ident))
 		const collaborators_html: JSX.Element[] = []
 
 		// 1. name2
 		// 2. name1
 		for (let i = 0; i < collaborators.length; i++) {
-			const name = name_search(collaborators[i])
+			const name = ident_name_from(collaborators[i])
 			collaborators_html.push(<pre>{tooltip_ident(collaborators[i], `${i + 1}. ${name}`)}</pre>)
+		}
+
+		collaborators_elem = <>{...collaborators_html}</>
+	} else {
+		const { album_ids, track_ids } = unwrap_artists_media(ident_id<ArtistId>(ident))
+		
+		const collaborators_html: JSX.Element[] = []
+
+		if (album_ids.length > 0) {
+			collaborators_html.push(<pre><u>Albums</u></pre>)
+
+			for (let i = 0; i < album_ids.length; i++) {
+				const ident = ident_make(album_ids[i], 'album_id')
+				
+				const name = ident_name_from(ident)
+				collaborators_html.push(<pre>{tooltip_ident(ident, `${i + 1}. ${name}`)}</pre>)
+			}
+		}
+
+		if (track_ids.length > 0) {
+			collaborators_html.push(<pre><u>Singles</u></pre>)
+
+			for (let i = 0; i < track_ids.length; i++) {
+				const ident = ident_make(track_ids[i], 'track_id')
+				
+				const name = ident_name_from(ident)
+				collaborators_html.push(<pre>{tooltip_ident(ident, `${i + 1}. ${name}`)}</pre>)
+			}
 		}
 
 		collaborators_elem = <>{...collaborators_html}</>
@@ -301,15 +274,30 @@ function unwrap_selected(): { albums: AlbumId[], singles: TrackId[] } {
 
 async function build(path: string) {
 	const { albums, singles } = unwrap_selected()
-	console.log(path, albums, singles)
+
+	type Kind = { album: AlbumId } | { single: TrackId }
+
+	const media: Kind[] = [
+		...albums.map(it => ({ album: it })),
+		...singles.map(it => ({ single: it }))
+	]
+
+	await run_with_concurrency_limit(media, 10, async (kind) => {
+		if ('album' in kind) {
+			await build_album(path, kind.album)
+		} else {
+			await build_single(path, kind.single)
+		}
+	})
 }
 
 export function route_build(path: string) {
 	currently_building = true
 	htmx(BuildButton())
 
-	build(path).then(() => {
+	build(path).finally(() => {
 		currently_building = false
+		route_select_clear()
 		htmx(BuildButton())
 	})
 }
@@ -321,7 +309,7 @@ function BuildButton(): [boolean, JSX.Element] {
 
 	return [true, <div id="build">
 		<form hx-swap="none">
-			<input type="text" name="path" placeholder="path" minlength="1" required value="mnt2" />
+			<input type="text" name="path" placeholder="path" minlength="1" required value="~/mnt2" />
 			<button type="button" hx-post="/build" hx-trigger="click">Build</button>
 		</form>
 	</div>]
@@ -381,7 +369,7 @@ function MergeButton(): [boolean, JSX.Element]  {
 function route_select_rendender() {
 
 	function output_map(ident: Ident) {
-		const name = name_search(ident)
+		const name = ident_name_from(ident)
 		return <div class="nbox">{tooltip_ident(ident, name)}</div>
 	}
 

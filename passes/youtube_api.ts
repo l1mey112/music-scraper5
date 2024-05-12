@@ -1,10 +1,12 @@
 import { nfetch } from "../fetch"
+import { assert } from "../pass_misc"
 
 const YT_LEMNOS_URL = 'https://yt.lemnoslife.com'
 
 // check if https://www.youtube.com/shorts/{} redirects
 export async function meta_youtube_video_is_short(video_id: string): Promise<boolean> {
 	const resp = await nfetch(`https://www.youtube.com/shorts/${video_id}`)
+	assert(resp.ok)
 	return !resp.redirected
 }
 

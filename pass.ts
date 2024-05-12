@@ -63,11 +63,12 @@ type PassAfter = {
 export const HOUR = 1000 * 60 * 60
 export const DAY = HOUR * 24
 
-export function queue_dispatch_immediate<T extends PassIdentifier>(pass: T, payload: PassIdentifierPayload<T>) {
+export function queue_dispatch_immediate<T extends PassIdentifier>(pass: T, payload: PassIdentifierPayload<T>, preferred_time?: number) {
 	db.insert($queue)
 		.values({
 			pass: pass_hash(pass),
 			payload,
+			preferred_time,
 		})
 		.onConflictDoNothing()
 		.run()
@@ -146,12 +147,10 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 
 				if (k.length > 0) {
 					const converted = k.map<QueueEntry<unknown>>(it => {
-						const entry = {
+						return {
 							...it,
 							pass: name,
 						}
-
-						return entry
 					})
 					
 					yield {

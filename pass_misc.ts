@@ -1,7 +1,7 @@
 import { InferInsertModel, SQL, sql } from "drizzle-orm"
 import { db, sqlite } from "./db"
 import { $album, $artist, $track_artist, $external_links, $locale, $queue, $spotify_album, $spotify_artist, $spotify_track, $track, $youtube_channel, $youtube_video, $album_track, $image, $source } from "./schema"
-import { snowflake_id } from "./ids"
+import { snowflake_id, snowflake_id_with } from "./ids"
 import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, LinkEntry, LocaleEntry, MaybePromise, PassHashed, QueueEntry, Snowflake, TrackEntry, TrackId } from "./types"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
@@ -237,6 +237,22 @@ export function not_exists<T>(table: SQLiteTable, cond: SQL) {
 		.get() === undefined
 }
 
+// results in short circuiting if the id exists, better than using a union
+const id_exists_stmt = sqlite.prepare<{ found: 0 | 1 }, [TrackId | AlbumId | ArtistId]>(`
+	select
+		case
+			when exists (select 1 from track where id = ?1) then 1
+			when exists (select 1 from album where id = ?1) then 1
+			when exists (select 1 from artist where id = ?1) then 1
+			else 0
+		end as found
+	limit 1;
+`)
+
+function id_exists(id: TrackId | AlbumId | ArtistId) {
+	return id_exists_stmt.get(id)?.found === 1
+}
+
 function object_has_any(data: any): boolean {
 	if (typeof data !== 'object') {
 		return false
@@ -271,7 +287,7 @@ const kind_desc: Record<ArticleKind, SQLiteTable> = {
 	artist_id: $artist,
 }
 
-export function get_ident_or_new<T extends ArticleKind>(foreign_id: string, foreign_table: SQLiteTable, kind: T, aux?: Omit<KindToEntry[T], 'id'>): [Ident, KindToId[T]] {
+export function get_ident_or_new<T extends ArticleKind>(preferred_time: number | null | undefined, foreign_id: string, foreign_table: SQLiteTable, kind: T, aux?: Omit<KindToEntry[T], 'id'>): [Ident, KindToId[T]] {
 	let data: [Ident, KindToId[T]] | undefined
 
 	const a = db.select({ id: sql<KindToId[T]>`${sql.identifier(kind)}` })
@@ -284,7 +300,24 @@ export function get_ident_or_new<T extends ArticleKind>(foreign_id: string, fore
 	}
 
 	if (!data) {
-		const id = snowflake_id() as KindToId[T]
+		let id
+		if (preferred_time) {			
+			// create a new snowflake id with a preferred time
+
+			let seq = 0
+			while (true) {
+				id = snowflake_id_with(preferred_time, seq++) as KindToId[T]
+				if (!id_exists(id)) {
+					break
+				}
+
+				console.log(`get_ident_or_new: retrying (seq: ${seq})`, id)
+			}
+			console.log(`get_ident_or_new: created`, id, new Date(preferred_time), kind, aux)
+		} else {
+			id = snowflake_id() as KindToId[T]
+		}
+
 		data = [ident_make(id, kind), id]
 	}
 
@@ -324,6 +357,15 @@ export function get_ident<T extends ArticleKind>(foreign_id: string, foreign_tab
 
 export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: KindToId[T]) {
 	assert(kind !== 'album_id') // not implemented yet
+
+	// id1 <- id2
+	// merge into oldest
+
+	if (id1 > id2) {
+		let tmp = id1
+		id1 = id2
+		id2 = tmp
+	}
 
 	const migration_tables_ident = [
 		$image,
@@ -394,8 +436,6 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 				arr.push(i.id)
 				track_artist_grouped.set(i.track_id, arr)
 			}
-
-			console.log(track_artist_grouped)
 
 			for (const [_, mapping_ids] of track_artist_grouped) {
 				// sort by lowest first

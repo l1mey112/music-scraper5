@@ -97,6 +97,7 @@ export type QueueEntry<T> = {
 	id: QueueId
 	pass: PassIdentifier
 	payload: T
+	preferred_time?: number | null
 }
 
 export type QueueId = NewType<'QueueId', number>

@@ -4,6 +4,7 @@ import { $kv_store } from "./schema"
 import { pass_exception } from "./pass"
 import { AccessToken, SpotifyApi, UserProfile } from "@spotify/web-api-ts-sdk"
 import { nfetch } from "./fetch"
+import { atexit } from "./atexit"
 
 export type CredentialKind = keyof CredentialStore
 type CredentialStore = {
@@ -40,50 +41,37 @@ const credential_props: CredentialProp[] = [
 	},
 ] */
 
-function cred_db_set(store: CredentialStore) {
+function cred_get<T extends CredentialKind>(kind: T): CredentialStore[T] {
+	const cred = db.select({ data: $kv_store.data })
+		.from($kv_store)
+		.where(sql`kind = ${`cred.${kind}`}`)
+		.get() as { data: CredentialStore[T] } | undefined
+	
+	if (!cred) {
+		return []
+	}
+
+	return cred.data
+}
+
+function cred_store<T extends CredentialKind>(kind: T, data: CredentialStore[T]) {
 	db.insert($kv_store)
-		.values({ kind: 'cred', data: store })
+		.values({ kind: `cred.${kind}`, data })
 		.onConflictDoUpdate({
 			target: $kv_store.kind,
-			set: { data: store }
+			set: { data }
 		})
 		.run()
 }
 
-function cred_db_get(): CredentialStore {
-	let store: CredentialStore = {
-		'spotify_api': [],
-		'deezer_arl': [],
-		'spotify_dl_user': [],
-		'spotify_user': [],
-	}
-
-	const cred = db.select({ data: $kv_store.data })
-		.from($kv_store)
-		.where(sql`kind = 'cred'`)
-		.get() as { data: CredentialStore } | undefined
-
-	// fill in the blanks
-	if (cred) {
-		store = { ...store, ...cred.data }
-	}
-
-	return store
-}
-
 // must be called inside a pass, throws PassStopException if cred not found
-export function pass_cred_get<T extends CredentialKind>(kind: T): CredentialStore[T] {
-	const datum = cred_db_get()[kind]
+function pass_cred_assert<T extends CredentialKind>(kind: T): CredentialStore[T] {
+	const datum = cred_get(kind)
 
 	if (datum.length === 0) {
 		pass_exception(`[cred_get] ${kind} not found`)
 	}
-	
-	return datum
-}
 
-function pass_cred_get_bare<T extends CredentialKind>(kind: T): CredentialStore[T] {
-	const datum = cred_db_get()[kind]
 	return datum
 }
 
@@ -110,21 +98,33 @@ const scopes = [
 	"user-read-private",
 ]
 
+const spotify_config = {
+	fetch: nfetch,
+}
+
 export function pass_spotify_api(): SpotifyApi {
 	if (_spotify_api) {
 		return _spotify_api
 	}
 
-	const [[client_id, client_secret], ] = pass_cred_get('spotify_api')
+	const [[client_id, client_secret], ] = pass_cred_assert('spotify_api')
 
-	_spotify_api = SpotifyApi.withClientCredentials(client_id, client_secret, scopes, {
-		fetch: nfetch,
-	})
+	_spotify_api = SpotifyApi.withClientCredentials(client_id, client_secret, scopes, spotify_config)
 
 	return _spotify_api
 }
 
-let _spotify_user: [SpotifyApi, UserProfile]
+let _spotify_user: [SpotifyApi, UserProfile] | undefined
+
+atexit(async () => {	
+	if (_spotify_user) {
+		const token = await _spotify_user[0].getAccessToken()
+
+		if (token) {
+			cred_store('spotify_user', [token])
+		}
+	}
+})
 
 export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 	if (_spotify_user) {
@@ -132,13 +132,13 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 	}
 
 	const client_redirect_uri = 'http://localhost:8080/callback'
-	const [[client_id, client_secret], ] = pass_cred_get('spotify_api')
+	const [[client_id, client_secret], ] = pass_cred_assert('spotify_api')
 
-	const [access_token, ] = pass_cred_get_bare('spotify_user')
+	const [access_token, ] = cred_get('spotify_user')
 
 	if (access_token) {
 		// TODO: duplicated code
-		const api = SpotifyApi.withAccessToken(client_id, access_token)
+		const api = SpotifyApi.withAccessToken(client_id, access_token, spotify_config)
 		_spotify_user = [api, await api.currentUser.profile()]
 		return _spotify_user
 	}
@@ -216,17 +216,13 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 	}
 
 	const token = await spotify_auth_user()
-	const api = SpotifyApi.withAccessToken(client_id, token)
+	const api = SpotifyApi.withAccessToken(client_id, token, spotify_config)
 	const profile = await api.currentUser.profile()
-
-	const store = cred_db_get()
-	store['spotify_user'] = [token]
-	cred_db_set(store)
 
 	_spotify_user = [api, profile]
 	return _spotify_user
 }
 
 export function pass_zotify_credentials(): [string, string] {
-	return pass_cred_get('spotify_dl_user')[0]
+	return pass_cred_assert('spotify_dl_user')[0]
 }

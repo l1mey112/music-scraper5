@@ -49,7 +49,7 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 		db.transaction(db => {
 			const spotify_id = entry.payload
 			const isrc: string | null | undefined = track.external_ids.isrc
-			const [ident, track_id] = get_ident_or_new(spotify_id, $spotify_track, 'track_id', { isrc })
+			const [ident, track_id] = get_ident_or_new(entry.preferred_time, spotify_id, $spotify_track, 'track_id', { isrc })
 
 			const spotify_album_id = track.album.id
 
@@ -100,7 +100,7 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 
 		return db.transaction(async db => {
 			const spotify_id = entry.payload
-			const [ident, album_id] = get_ident_or_new(spotify_id, $spotify_album, 'album_id')
+			const [ident, album_id] = get_ident_or_new(entry.preferred_time, spotify_id, $spotify_album, 'album_id')
 
 			// most albums have < 50 tracks, the album request already provides us with enough
 			// but in cases where it doesn't, we'll have to fetch the tracks separately
@@ -177,7 +177,7 @@ export function pass_artist_index_spotify_artist(entries: QueueEntry<string>[]) 
 
 		db.transaction(db => {
 			const spotify_id = entry.payload
-			const [ident, artist_id] = get_ident_or_new(spotify_id, $spotify_artist, 'artist_id')
+			const [ident, artist_id] = get_ident_or_new(entry.preferred_time, spotify_id, $spotify_artist, 'artist_id')
 
 			const name: LocaleEntry = {
 				ident,

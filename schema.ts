@@ -31,6 +31,7 @@ export const $track_artist = sqliteTable('track_artist', {
 	unq: unique('track_artist.unq').on(t.track_id, t.artist_id),
 }))
 
+// TODO: should probably store exact idx and disc number
 export const $album_track = sqliteTable('album_track', {
 	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
 	album_id: integer('album_id').$type<AlbumId>().notNull(),
@@ -119,6 +120,7 @@ export const $queue = sqliteTable('queue', {
 	id: integer('id').$type<QueueId>().primaryKey({ autoIncrement: true }), // stable rowid
 	pass: integer('pass').$type<PassHashed>().notNull(),
 	payload: text('payload', { mode: "json" }).notNull(), // data decided by the work cmd
+	preferred_time: integer('preferred_time'), // unix millis, used for inserting at a specific time
 
 	expiry: integer('expiry').default(0).notNull(), // unix millis, zero for immediate
 	try_count: integer('try_count').default(0).notNull(), // amount of tries thus far

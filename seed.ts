@@ -57,32 +57,34 @@ const seedto: Record<string, (id: string) => MaybePromise<void>> = {
 	'spotify_user.seed': seed_spotify_user,
 }
 
-for (const seed in seedto) {
-	const pass_entry = seedto[seed]
-	const fp = `${fs_root}/${seed}`
-	const file = Bun.file(fp)
-
-	if (!await file.exists()) {
-		continue
-	}
-
-	// i would like a lines() API bun.
-	const text = await file.text()
-	const lines = text.split('\n')
-
-	await db.transaction(async db => {
-		// list of payloads separated by line
-		for (let line of lines) {
-			line = line.split('#', 1)[0]
-			line = line.trim()
-
-			if (line.length === 0) {
-				continue
-			}
-
-			await pass_entry(line)
+export async function seed_root() {
+	for (const seed in seedto) {
+		const pass_entry = seedto[seed]
+		const fp = `${fs_root}/${seed}`
+		const file = Bun.file(fp)
+	
+		if (!await file.exists()) {
+			continue
 		}
-	})
-
-	console.log(`seed file: ${seed} (${lines.length} commands)`)
+	
+		// i would like a lines() API bun.
+		const text = await file.text()
+		const lines = text.split('\n')
+	
+		await db.transaction(async db => {
+			// list of payloads separated by line
+			for (let line of lines) {
+				line = line.split('#', 1)[0]
+				line = line.trim()
+	
+				if (line.length === 0) {
+					continue
+				}
+	
+				await pass_entry(line)
+			}
+		})
+	
+		console.log(`seed file: ${seed} (${lines.length} commands)`)
+	}
 }

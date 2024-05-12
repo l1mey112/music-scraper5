@@ -65,8 +65,11 @@ export function snowflake_id(): Snowflake {
 	}
 	const seq = sequence++
 
-	const int_snowflake = BigInt(epoch + now) << 5n | BigInt(seq)
+	return snowflake_id_with(now, seq)
+}
 
+export function snowflake_id_with(time: number, seq: number): Snowflake {
+	const int_snowflake = BigInt(epoch + time) << 5n | BigInt(seq)
 	return Number(int_snowflake)
 }
 

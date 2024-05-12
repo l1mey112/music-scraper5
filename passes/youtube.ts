@@ -47,7 +47,7 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 			let has_loc_description = false
 
 			const youtube_id = entry.payload
-			const [ident, track_id] = get_ident_or_new(youtube_id, $youtube_video, 'track_id')
+			const [ident, track_id] = get_ident_or_new(entry.preferred_time, youtube_id, $youtube_video, 'track_id')
 
 			const locales: LocaleEntry[] = []
 
@@ -161,7 +161,7 @@ export function pass_artist_index_youtube_channel(entries: QueueEntry<string>[])
 
 		db.transaction(db => {
 			const youtube_id = entry.payload
-			const [ident, artist_id] = get_ident_or_new(youtube_id, $youtube_channel, 'artist_id')
+			const [ident, artist_id] = get_ident_or_new(entry.preferred_time, youtube_id, $youtube_channel, 'artist_id')
 
 			type ChannelKey = Exclude<keyof typeof channel.images, 'tvBanner' | 'mobileBanner'>
 
@@ -255,12 +255,16 @@ export function pass_aux_youtube_channel0(entries: QueueEntry<string>[]) {
 
 // aux.index_youtube_playlist
 export function pass_aux_index_youtube_playlist(entries: QueueEntry<string>[]) {
-	return run_with_concurrency_limit(entries, 4, async (entry) => {
+	return run_with_concurrency_limit(entries, 12, async (entry) => {
 		const youtube_id = entry.payload
 
 		const videos = await meta_youtube_channel_playlist(youtube_id)
 
-		await run_with_concurrency_limit(videos.entries(), 4, async ([i, video_id]) => {
+		await run_with_concurrency_limit(videos.entries(), 16, async ([i, video_id]) => {
+			if (!not_exists($youtube_video, sql`id = ${video_id}`)) {
+				delete videos[i]
+				return
+			}
 			if (await meta_youtube_video_is_short(video_id)) {
 				delete videos[i]
 			}
@@ -270,7 +274,7 @@ export function pass_aux_index_youtube_playlist(entries: QueueEntry<string>[]) {
 
 		db.transaction(db => {
 			for (const video_id of videos) {
-				if (video_id && not_exists($youtube_video, sql`id = ${video_id}`)) {
+				if (video_id) {
 					queue_dispatch_immediate('track.index_youtube_video', video_id)
 				}
 			}
