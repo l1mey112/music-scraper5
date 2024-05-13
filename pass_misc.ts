@@ -7,8 +7,6 @@ import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
 import { queue_dispatch_immediate } from "./pass"
 
-
-
 // QUERY PLAN
 // `--SEARCH queue USING INDEX queue.idx0 (expiry<?)
 /* const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmdHashed]>(`

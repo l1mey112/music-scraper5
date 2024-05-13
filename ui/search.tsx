@@ -1,5 +1,5 @@
 import { sqlite } from "../db"
-import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Script, TrackId, image_kind_tostring } from "../types"
+import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Locale, TrackId, image_kind_tostring } from "../types"
 import { ArticleKind, assert, ident_classify, ident_classify_fallable, ident_id, ident_make, merge, run_with_concurrency_limit } from "../pass_misc"
 import { snowflake_timestamp } from "../ids"
 import { send as htmx } from "./ui"

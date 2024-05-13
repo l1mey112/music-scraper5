@@ -4,7 +4,7 @@ import { locale_from_bcp_47 } from "../locale"
 import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { image_queue_immutable_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, not_exists, get_ident_or_new, get_ident } from "../pass_misc"
 import { $youtube_channel, $youtube_video } from "../schema"
-import { ArtistId, Ident, ImageKind, Script, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
+import { ArtistId, Ident, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_playlist, meta_youtube_channel_v3, meta_youtube_video_is_short, meta_youtube_video_v3 } from "./youtube_api"
 
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
@@ -85,7 +85,7 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 			{
 				// this gets lower quality than localizations, insert last
 
-				let default_video_locale: undefined | Script
+				let default_video_locale: undefined | Locale
 				if (video.defaultLanguage) {
 					const locale = locale_from_bcp_47(video.defaultLanguage)
 					if (locale) {
