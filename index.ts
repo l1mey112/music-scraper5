@@ -1,6 +1,5 @@
 import { _manual_cleanup, atexit } from "./atexit"
 import { pass } from "./pass"
-import { seed_root } from './seed'
 import { serve_ui } from "./ui/ui"
 
 const directive = process.argv[2]
@@ -10,8 +9,6 @@ if (directive === 'ui') {
 }
 
 try {
-	await seed_root()
-
 	for await (const status of pass()) {
 		switch (status.kind) {
 			case 'before': {

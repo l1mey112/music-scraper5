@@ -95,7 +95,7 @@ export async function build_album(root_wd: string, target: AlbumId) {
 		.where(sql`album_id = ${target}`)
 		.orderBy(sql`id asc`)
 		.all()
-	
+
 	const track_targets: BuildTargetTrack[] = []
 
 	for (const [i, it] of tracks.entries()) {
@@ -247,7 +247,7 @@ async function build_target(root_wd: string, target: BuildTarget) {
 				stdout: 'pipe',
 			})
 			await proc.exited
-	
+
 			if (proc.exitCode !== 0) {
 				throw new Error(`ffmpeg exited with code ${proc.exitCode}, stderr: ${await new Response(proc.stderr).text()}`)
 			}

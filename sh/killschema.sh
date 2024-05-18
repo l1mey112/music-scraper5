@@ -9,7 +9,7 @@ fi
 
 # -f to avoid error if enoent
 rm -rf migrations root/media
-rm -f root/db.sqlite root/db.sqlite-shm root/db.sqlite-wal
+rm -f root/db.sqlite root/db.sqlite-shm root/db.sqlite-wal root/wal.log
 
 bun run drizzle-kit generate:sqlite
 HEAD=`ls -aht migrations/*.sql | head -1`

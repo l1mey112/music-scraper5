@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 
-import { db_close } from "../db";
 import { queue_dispatch_immediate, queue_known_pass } from "../pass";
 
 const cmds = process.argv.slice(2)
@@ -19,5 +18,3 @@ for (let i = 0; i < cmds.length; i += 2) {
 	}
 	queue_dispatch_immediate(cmd, payload as any)
 }
-
-db_close()

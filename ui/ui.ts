@@ -30,7 +30,7 @@ export function serve_ui() {
 		},
 		async fetch(req, server) {
 			const url = new URL(req.url)
-	
+
 			switch (url.pathname) {
 				case '/':
 				case '/index.html': {
@@ -75,17 +75,17 @@ export function serve_ui() {
 					if (!q) {
 						return new Response("400 Bad Request", { status: 400 })
 					}
-	
+
 					// don't bother checking if the hash is in the db
 					// its most likely fine
-	
+
 					const path = fs_hash_path(q as FSRef)
 					const file = Bun.file(path)
-	
+
 					if (!await file.exists()) {
 						return new Response("404 Not Found", { status: 404 })
 					}
-	
+
 					return new Response(file, {
 						headers: {
 							'Cache-Control': 'public immutable max-age=31536000',
@@ -107,6 +107,6 @@ export function serve_ui() {
 			message(ws, data) {}
 		},
 	})
-	
+
 	console.log(`ui: listening on http://localhost:3000/`)
 }

@@ -199,7 +199,7 @@ function Box({ ident }: { ident: Ident }) {
 		collaborators_elem = <>{...collaborators_html}</>
 	} else {
 		const { album_ids, track_ids } = unwrap_artists_media(ident_id<ArtistId>(ident))
-		
+
 		const collaborators_html: JSX.Element[] = []
 
 		if (album_ids.length > 0) {
@@ -207,7 +207,7 @@ function Box({ ident }: { ident: Ident }) {
 
 			for (let i = 0; i < album_ids.length; i++) {
 				const ident = ident_make(album_ids[i], 'album_id')
-				
+
 				const name = ident_name_from(ident)
 				collaborators_html.push(<pre>{tooltip_ident(ident, `${i + 1}. ${name}`)}</pre>)
 			}
@@ -218,7 +218,7 @@ function Box({ ident }: { ident: Ident }) {
 
 			for (let i = 0; i < track_ids.length; i++) {
 				const ident = ident_make(track_ids[i], 'track_id')
-				
+
 				const name = ident_name_from(ident)
 				collaborators_html.push(<pre>{tooltip_ident(ident, `${i + 1}. ${name}`)}</pre>)
 			}

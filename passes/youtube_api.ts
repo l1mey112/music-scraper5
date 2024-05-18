@@ -13,10 +13,7 @@ export async function meta_youtube_video_is_short(video_id: string): Promise<boo
 // no batch operation, that is annoying
 // i hate hammering the lemmnos api - it aint right
 export async function meta_youtube_handle_to_id(handle: string): Promise<string | undefined> {
-	if (!handle.startsWith('@')) {
-		throw new Error(`youtube handle must start with @ (id: ${handle})`)
-	}
-
+	assert(handle.startsWith('@'))
 	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/channels&forHandle=${handle}&part=snippet`)
 
 	const json: any = await resp.json()
@@ -30,16 +27,13 @@ export async function meta_youtube_handle_to_id(handle: string): Promise<string 
 // 50 video ids in a batch
 // returns a list of youtube video metadata, id if not found
 export async function meta_youtube_video_v3(video_ids: string[]): Promise<(YoutubeVideo | string)[]> {
-	if (video_ids.length > 50) {
-		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${video_ids.join(',')})`)
-	}
-
+	assert(video_ids.length <= 50)
 	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/videos?id=${video_ids.join(',')}&part=snippet,localizations`)
 
 	if (!resp.ok) {
 		console.error(await resp.text())
 		console.error(resp.statusText)
-		throw new Error(`youtube video req failed`)
+		assert(false, 'youtube video req failed')
 	}
 	const json = await resp.json() as any
 
@@ -85,16 +79,13 @@ export async function meta_youtube_video_v3(video_ids: string[]): Promise<(Youtu
 
 // does not return `display_name` - lemmnos yt API doesn't provide it
 export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promise<(string | YoutubeChannelLemmnos)[]> {
-	if (channel_ids.length > 50) {
-		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${channel_ids.join(',')})`)
-	}
-
+	assert(channel_ids.length <= 50)
 	const resp = await nfetch(`${YT_LEMNOS_URL}/channels?id=${channel_ids.join(',')}&part=snippet,about`)
 
 	if (!resp.ok) {
 		console.error(await resp.text())
 		console.error(resp.statusText)
-		throw new Error(`youtube channel req failed`)
+		assert(false, 'youtube channel req failed')
 	}
 	const json = await resp.json() as any
 
@@ -119,7 +110,7 @@ export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promi
 			for (const link of inner.about.links) {
 				delete link.favicon
 			}
-			
+
 			result.push({
 				id: inner.id,
 				about: inner.about,
@@ -132,16 +123,13 @@ export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promi
 }
 
 export async function meta_youtube_channel_v3(channel_ids: string[]): Promise<(string | YoutubeChannelV3)[]> {
-	if (channel_ids.length > 50) {
-		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${channel_ids.join(',')})`)
-	}
-
+	assert(channel_ids.length <= 50)
 	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/channels?part=snippet&id=${channel_ids.join(',')}`)
 
 	if (!resp.ok) {
 		console.error(await resp.text())
 		console.error(resp.statusText)
-		throw new Error(`youtube channel req failed`)
+		assert(false, 'youtube channel req failed')
 	}
 	const json = await resp.json() as any
 
@@ -189,7 +177,7 @@ export async function meta_youtube_channel_playlist(playlist_id: string): Promis
 		if (!resp.ok || !lastresp.items || lastresp.error) {
 			console.error(lastresp)
 			console.error(resp.statusText)
-			throw new Error(`youtube playsist req failed`)
+			assert(false, 'youtube playlist req failed')
 		}
 
 		ids.push(...lastresp.items.map(x => x.contentDetails.videoId))

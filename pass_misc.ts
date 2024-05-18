@@ -255,7 +255,7 @@ function object_has_any(data: any): boolean {
 	if (typeof data !== 'object') {
 		return false
 	}
-	
+
 	for (const i in data) {
 		if (data[i] !== undefined && data[i] !== null) {
 			return true
@@ -351,6 +351,54 @@ export function get_ident<T extends ArticleKind>(foreign_id: string, foreign_tab
 	assert(a, `foreign key not found (${foreign_id})`)
 
 	return [ident_make(a.id, kind), a.id]
+}
+
+export function ident_link_command(ident: Ident): string {
+	let thirdparty: [prefix: string, SQLiteTable][]
+
+	const kind = ident_classify(ident)
+	const prefix = ident_prefix(ident)
+	const id = ident_id(ident)
+
+	switch (kind) {
+		case 'track_id': {
+			thirdparty = [
+				['yt', $youtube_video],
+				['sp', $spotify_track],
+			]
+			break
+		}
+		case 'album_id': {
+			thirdparty = [
+				['sp', $spotify_album],
+			]
+			break
+		}
+		case 'artist_id': {
+			thirdparty = [
+				['yt', $youtube_channel],
+				['sp', $spotify_artist],
+			]
+			break
+		}
+	}
+
+	// {ident_prefix}.{thirdparty_prefix}:xxxxxxxxxxx, ...
+
+	const components = []
+
+	for (const [prefix, table] of thirdparty) {
+		const a = db.select({ id: sql`id` })
+			.from(table)
+			.where(sql`${sql.identifier(kind)} = ${id}`)
+			.all()
+
+		for (const i of a) {
+			components.push(`${prefix}:${i.id}`)
+		}
+	}
+
+	return `${prefix}.${components.join(',')}`
 }
 
 export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: KindToId[T]) {
@@ -527,6 +575,9 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 				.onConflictDoNothing()
 				.run()
 		}
+
+		// log the merge
+		wal_link(ident1)
 	})
 }
 
@@ -573,7 +624,7 @@ export function link_select(kind: Link[] | Link = Link["Unknown URL"]): (LinkEnt
 	if (!(kind instanceof Array)) {
 		kind = [kind]
 	}
-	
+
 	const k = db.select({
 		rowid: rowId(),
 		ident: $external_links.ident,
@@ -700,6 +751,10 @@ export function ident_id<T extends TrackId | AlbumId | ArtistId>(id: Ident): T {
 	return Number(id.slice(2)) as T
 }
 
+export function ident_prefix(id: Ident): 'tr' | 'al' | 'ar' {
+	return id.slice(0, 2) as 'tr' | 'al' | 'ar'
+}
+
 export function ident_classify(ident: Ident | string): ArticleKind {
 	assert(ident.length >= 3)
 	switch (ident.slice(0, 2)) {
@@ -718,7 +773,7 @@ export function ident_classify_fallable(ident: Ident | string): ArticleKind | un
 	if (ident.length < 3) {
 		return
 	}
-	
+
 	switch (ident.slice(0, 2)) {
 		case 'tr':
 			return 'track_id'
@@ -814,6 +869,21 @@ export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrenc
 	// wait for all active operations to complete
 	await Promise.all(active_promises)
 }
+
+// functions equivalently to run_with_concurrency_limit, but with a fail limit
+/* export async function run_with_concurrency_limit_with_abort<T>(arr: Iterable<T>, concurrency_limit: number, fail_limit: number, next: (v: T) => Promise<boolean>): Promise<boolean> {
+	const active_promises: Promise<boolean>[] = []
+
+	let failed = 0
+
+	for (const item of arr) {
+		if (failed >= fail_limit) {
+			return false
+		}
+
+		// wait until there's room for a new operation
+		while (active_promises.length >= concurrency_limit) {
+			await Promise */
 
 export function assert(condition: any, message?: string): asserts condition {
 	if (!condition) {

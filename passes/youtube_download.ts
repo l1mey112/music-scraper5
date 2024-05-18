@@ -5,7 +5,7 @@ import { FSRef, QueueEntry } from "../types"
 import { $source, $youtube_video } from "../schema"
 import { sql } from "drizzle-orm"
 import { get_ident, run_with_concurrency_limit } from "../pass_misc"
-import { queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
+import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 
 const has_video_source = sqlite.prepare<number, [string]>(`
 	select 1
@@ -52,15 +52,20 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 			no_log: {
 				if (e instanceof Error) {
 					if (e.message.includes('This video is only available to Music Premium members')) {
-						break no_log
-					}
-					if (e.message.includes('This live event will begin in a few moments.')) {
-						break no_log
+						queue_retry_failed(entry, 'This video is only available to Music Premium members')
+						return
+					} else if (e.message.includes('This live event will begin in a few moments.')) {
+						queue_again_later(entry)
+						return
+					} else if (e.message.includes('Video unavailable')) {
+						queue_retry_failed(entry, 'Video unavailable')
+						return
 					}
 				}
-				console.log('source.download.from_youtube_video: caught', e)
-			}			
-			queue_retry_failed(entry)
+			}
+			console.error('failed to download youtube video', youtube_id)
+			console.error(e)
+			queue_retry_failed(entry, `failed to download youtube video ${youtube_id}`)
 			return
 		}
 

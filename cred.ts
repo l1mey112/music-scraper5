@@ -46,7 +46,7 @@ function cred_get<T extends CredentialKind>(kind: T): CredentialStore[T] {
 		.from($kv_store)
 		.where(sql`kind = ${`cred.${kind}`}`)
 		.get() as { data: CredentialStore[T] } | undefined
-	
+
 	if (!cred) {
 		return []
 	}

@@ -13,12 +13,11 @@ export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArt
 	const response = await nfetch(url)
 	const text = await response.text()
 	if (!response.ok) {
-		return undefined
+		return
 	}
 	const match = text.match(/<script\s+id="initial-state"\s+type="text\/plain">([^<]+)<\/script>/)
 	if (!match) {
-		console.log('spotify_raw_artist: no match')
-		return undefined
+		return
 	}
 
 	const data: RawArtistInitialData = JSON.parse(Buffer.from(match[1], 'base64').toString('utf-8'))
@@ -37,9 +36,7 @@ export async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArt
 			header_images: qnd.visuals.headerImage?.sources ?? [],
 		}
 	} catch (e) {
-		console.log('spotify_raw_artist: caught', e)
-		console.log(qnd)
-		return undefined
+		return
 	}
 
 	return ret
@@ -51,7 +48,7 @@ export function pass_aux_spotify_artist0(entries: QueueEntry<string>[]) {
 		const spotify_id = entry.payload
 		const data = await spotify_raw_artist(spotify_id)
 		if (!data) {
-			return
+			return // will get reattempted anyway
 		}
 
 		db.transaction(db => {

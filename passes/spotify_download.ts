@@ -38,10 +38,13 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 		try {
 			// 160kbps (highest for free users)
 			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --root-path ${fs_media} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
+
 			// sometimes zotify doesn't return nonzero exit code on failure
 			const stdout = sh.stdout.toString()
 			if (stdout.includes('SONG IS UNAVAILABLE') || stdout.includes('SKIPPING')) {
-				throw new Error('SONG IS UNAVAILABLE')
+				// doesn't exist
+				queue_retry_failed(entry, 'SONG IS UNAVAILABLE')
+				return
 			}
 			if (sh.stderr.length > 0) {
 				throw new Error(sh.stderr.toString())
@@ -61,7 +64,7 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 
 			console.error('failed to download track', spotify_id)
 			console.error(e)
-			queue_retry_failed(entry)
+			queue_retry_failed(entry, `failed to download track ${spotify_id}`)
 			return
 		}
 

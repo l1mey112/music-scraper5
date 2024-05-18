@@ -15,6 +15,7 @@ function assert_directory(path: string, kind: string) {
 
 export const fs_root = realpathSync('root')
 export const fs_sqlite = `${fs_root}/db.sqlite`
+export const fs_wal = `${fs_root}/wal.log`
 export const fs_media = `${fs_root}/media`
 
 assert_directory(fs_root, "root")
