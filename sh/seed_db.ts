@@ -1,11 +1,13 @@
-import { sql } from "drizzle-orm";
-import { db } from "../db";
-import { fs_root } from "../fs";
-import { not_exists } from "../pass_misc";
-import { $youtube_channel, $youtube_video } from "../schema";
-import { queue_dispatch_immediate } from "../pass";
-import { pass_spotify_user } from "../cred";
-import { MaybePromise } from "../types";
+#!/usr/bin/env bun
+
+import { sql } from "drizzle-orm"
+import { db } from "../db"
+import { fs_root } from "../fs"
+import { not_exists } from "../pass_misc"
+import { $youtube_channel, $youtube_video } from "../schema"
+import { queue_dispatch_immediate } from "../pass"
+import { pass_spotify_user } from "../cred"
+import { MaybePromise } from "../types"
 
 function seed_youtube_video(id: string) {
 	if (not_exists($youtube_video, sql`id = ${id}`)) {
@@ -22,7 +24,6 @@ function seed_youtube_channel(id: string) {
 	//                        ^^
 	// reol uploads playlist: UUB6pJFaFByws3dQj4AdLdyA
 	//                        ^^
-	//
 	// https://www.youtube.com/playlist?list=UUB6pJFaFByws3dQj4AdLdyA
 	//                                       ^^^^^^^^^^^^^^^^^^^^^^^^
 

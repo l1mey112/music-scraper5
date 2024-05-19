@@ -42,7 +42,7 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 	return run_batched_zip(entries, 50, batch_fn, (entry, track) => {
 		// null (track doesn't exist), retry again later
 		if (!track) {
-			queue_retry_failed(entry, 'track not found')
+			queue_retry_failed(entry, `track not found (${entry.payload})`)
 			return
 		}
 
@@ -94,7 +94,7 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 	return run_batched_zip(entries, 20, batch_fn, async (entry, album) => {
 		// null (track doesn't exist), retry again later
 		if (!album) {
-			queue_retry_failed(entry, 'album not found')
+			queue_retry_failed(entry, `album not found (${entry.payload})`)
 			return
 		}
 
@@ -171,7 +171,7 @@ export function pass_artist_index_spotify_artist(entries: QueueEntry<string>[]) 
 	return run_batched_zip(entries, 50, batch_fn, (entry, artist) => {
 		// null (track doesn't exist), retry again later
 		if (!artist) {
-			queue_retry_failed(entry, 'artist not found')
+			queue_retry_failed(entry, `artist not found (${entry.payload})`)
 			return
 		}
 

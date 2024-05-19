@@ -70,6 +70,37 @@ export async function meta_youtube_video_v3(video_ids: string[]): Promise<(Youtu
 	return result
 }
 
+export async function meta_youtube_video_status_lemmnos(video_ids: string[]): Promise<(YoutubeVideoStatus | string)[]> {
+	assert(video_ids.length <= 50)
+	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/videos?id=${video_ids.join(',')}&part=short,music`)
+
+	if (!resp.ok) {
+		console.error(await resp.text())
+		console.error(resp.statusText)
+		assert(false, 'youtube video req failed')
+	}
+	const json = await resp.json() as any
+
+	if (!json.items) {
+		json.items = []
+	}
+
+	const result: (YoutubeVideoStatus | string)[] = []
+
+	let i = 0
+	for (const video_id of video_ids) {
+		const inner = json.items[i]
+		if (!inner || inner.id != video_id) {
+			result.push(video_id)
+		} else {
+			result.push({ music_available: inner.music.available, short_available: inner.short.available })
+			i++
+		}
+	}
+
+	return result
+}
+
 // lemnoslife doesn't provide display name
 // youtube v3 doesn't provide links
 //
@@ -184,6 +215,11 @@ export async function meta_youtube_channel_playlist(playlist_id: string): Promis
 	} while (lastresp.nextPageToken)
 
 	return ids
+}
+
+export type YoutubeVideoStatus = {
+	music_available: boolean
+	short_available: boolean
 }
 
 export type YoutubeImage = {

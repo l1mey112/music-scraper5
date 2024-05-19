@@ -6,6 +6,7 @@ import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, Lin
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
 import { queue_dispatch_immediate } from "./pass"
+import { wal_link } from "./wal"
 
 // QUERY PLAN
 // `--SEARCH queue USING INDEX queue.idx0 (expiry<?)
@@ -489,10 +490,14 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 				const first_artist = mapping_ids.shift()
 
 				if (first_artist) {
-					db.update($track_artist)
-						.set({ artist_id: id1 as ArtistId })
-						.where(sql`id = ${first_artist}`)
-						.run()
+					try {
+						db.update($track_artist)
+							.set({ artist_id: id1 as ArtistId })
+							.where(sql`id = ${first_artist}`)
+							.run()
+					} catch {
+						// ignore
+					}
 				}
 
 				for (const attribute_map of mapping_ids) {
