@@ -91,7 +91,6 @@ export function get_ident_or_new<T extends ArticleKind>(preferred_time: number |
 
 				console.log(`get_ident_or_new: retrying (seq: ${seq})`, id)
 			}
-			console.log(`get_ident_or_new: created`, id, new Date(preferred_time), kind, aux)
 		} else {
 			id = snowflake_id() as KindToId[T]
 		}
@@ -632,6 +631,7 @@ export async function run_batched_zip<T, O>(arr: T[], batch_size: number, batch_
 
 export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrency_limit: number, next: (v: T) => Promise<void>) {
 	const active_promises: Promise<void>[] = []
+	let has_error = false
 
 	for (const item of arr) {
 		// wait until there's room for a new operation
@@ -639,7 +639,10 @@ export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrenc
 			await Promise.race(active_promises)
 		}
 
-		const next_operation = next(item)
+		const next_operation = next(item).catch(err => {
+			has_error = true
+			throw err
+		})
 		active_promises.push(next_operation)
 
 		next_operation.finally(() => {
@@ -648,6 +651,10 @@ export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrenc
 				active_promises.splice(index, 1)
 			}
 		})
+
+		if (has_error) {
+			break
+		}
 	}
 
 	// wait for all active operations to complete

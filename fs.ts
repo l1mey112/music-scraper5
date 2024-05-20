@@ -21,6 +21,10 @@ export const fs_media = `${fs_root}/media`
 assert_directory(fs_root, "root")
 assert_directory(fs_media, "media")
 
+export function fs_root_path(path: string): string {
+	return `${fs_root}/${path}`
+}
+
 export function fs_hash_path(hash: FSRef): string {
 	return `${fs_media}/${shard_part(hash)}/${hash}`
 }

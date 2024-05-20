@@ -11,7 +11,7 @@ class PassStopException extends Error {
 	}
 }
 
-function pass_hash(pass: PassIdentifier): PassHashed {
+export function pass_hash(pass: PassIdentifier): PassHashed {
 	const [article, name] = pass.split('.')
 	const idx = pass_article_kinds.indexOf(article as PassArticle)
 

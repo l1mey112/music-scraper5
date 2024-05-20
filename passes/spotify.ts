@@ -1,10 +1,10 @@
-import { pass_spotify_api } from "../cred"
 import { db } from "../db"
 import { AlbumId, ArtistId, ImageKind, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { $spotify_album, $spotify_artist, $spotify_track } from "../schema"
 import { get_ident, get_ident_or_new, not_exists, image_queue_immutable_url, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
 import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { sql } from "drizzle-orm"
+import { pass_new_spotify_api } from "../cred"
 
 // aux.assign_track_spotify_artist
 export function pass_aux_assign_track_spotify_artist(entries: QueueEntry<[TrackId, spotify_artist: string]>[]) {
@@ -28,9 +28,8 @@ export function pass_aux_assign_album_spotify_track(entries: QueueEntry<[AlbumId
 
 // track.index_spotify_track
 export async function pass_track_index_spotify_track(entries: QueueEntry<string>[]) {
-	const api = pass_spotify_api()
-
 	function batch_fn(entry: QueueEntry<string>[]) {
+		const api = pass_new_spotify_api()
 		return api.tracks.get(entry.map(it => it.payload))
 	}
 
@@ -40,6 +39,7 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 	// they lied here, it's 50
 
 	return run_batched_zip(entries, 50, batch_fn, (entry, track) => {
+		const api = pass_new_spotify_api()
 		// null (track doesn't exist), retry again later
 		if (!track) {
 			queue_retry_failed(entry, `track not found (${entry.payload})`)
@@ -85,13 +85,13 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 
 // album.index_spotify_album
 export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
-	const api = pass_spotify_api()
-
 	function batch_fn(entry: QueueEntry<string>[]) {
+		const api = pass_new_spotify_api()
 		return api.albums.get(entry.map(it => it.payload))
 	}
 
 	return run_batched_zip(entries, 20, batch_fn, async (entry, album) => {
+		const api = pass_new_spotify_api()
 		// null (track doesn't exist), retry again later
 		if (!album) {
 			queue_retry_failed(entry, `album not found (${entry.payload})`)
@@ -157,9 +157,8 @@ export function pass_album_index_spotify_album(entries: QueueEntry<string>[]) {
 
 // artist.index_spotify_artist
 export function pass_artist_index_spotify_artist(entries: QueueEntry<string>[]) {
-	const api = pass_spotify_api()
-
 	function batch_fn(entry: QueueEntry<string>[]) {
+		const api = pass_new_spotify_api()
 		return api.artists.get(entry.map(it => it.payload))
 	}
 

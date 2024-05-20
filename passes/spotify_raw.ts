@@ -48,6 +48,7 @@ export function pass_aux_spotify_artist0(entries: QueueEntry<string>[]) {
 		const spotify_id = entry.payload
 		const data = await spotify_raw_artist(spotify_id)
 		if (!data) {
+			queue_complete(entry)
 			return // will get reattempted anyway
 		}
 

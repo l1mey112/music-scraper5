@@ -18,29 +18,33 @@ const similar_ident_prefix = (prefix: string) => `
 	and a.text like ('%' || b.text || '%')
 `
 
-// no memo needed for this
-const query_similar_names_ar_al = sqlite.prepare<Pair, []>(`
+function make_memo(stmt_string: string) {
+	const stmt = sqlite.prepare<Pair, []>(stmt_string)
+	
+	let memo: Pair[] | null = null
+	
+	return {
+		all() {
+			if (memo === null) {
+				memo = stmt.all()
+			}
+			return memo
+		},
+		remove(a: Ident, b: Ident) {
+			memo = memo!.filter(p => p.a !== a && p.b !== b)
+		}
+	}
+}
+
+const similar_names_ar_al = make_memo(`
 	${similar_ident_prefix('ar')}
 	union all
 	${similar_ident_prefix('al')}
 `)
 
-let query_similar_names_tr_stmt_memo: Pair[] | null = null
-const query_similar_names_tr_stmt = sqlite.prepare<Pair, []>(`
+const similar_names_tr = make_memo(`
 	${similar_ident_prefix('tr')}
 `)
-
-function query_similar_names_tr_memo_remove(pair: BarePair) {
-	query_similar_names_tr_stmt_memo = query_similar_names_tr_stmt_memo!.filter(p => p.a !== pair.a && p.b !== pair.b)
-}
-
-// use a memo
-function query_similar_names_tr_memo() {
-	if (query_similar_names_tr_stmt_memo === null) {
-		query_similar_names_tr_stmt_memo = query_similar_names_tr_stmt.all()
-	}
-	return query_similar_names_tr_stmt_memo
-}
 
 export function route_mergetwo(kind: Kind, a: Ident, b: Ident) {
 	const ident_kind = ident_classify(a)
@@ -52,8 +56,18 @@ export function route_mergetwo(kind: Kind, a: Ident, b: Ident) {
 	const id2 = ident_id(b)
 	merge(ident_kind, id1, id2)
 
-	if (ident_kind == 'track_id') {
-		query_similar_names_tr_memo_remove({ a, b })
+	switch (kind) {
+		case 'similar_names_ar_al': {
+			similar_names_ar_al.remove(a, b)
+			break
+		}
+		case 'similar_names_tr': {
+			similar_names_tr.remove(a, b)
+			break
+		}
+		default: {
+			assert(false)
+		}
 	}
 
 	route_mergeassist(kind)
@@ -64,11 +78,11 @@ export function route_mergeassist(kind: Kind = 'similar_names_ar_al') {
 
 	switch (kind) {
 		case 'similar_names_ar_al': {
-			pairs = query_similar_names_ar_al.all()
+			pairs = similar_names_ar_al.all()
 			break
 		}
 		case 'similar_names_tr': {
-			pairs = query_similar_names_tr_memo()
+			pairs = similar_names_tr.all()
 			break
 		}
 		default: {
