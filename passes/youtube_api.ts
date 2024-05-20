@@ -72,7 +72,7 @@ export async function meta_youtube_video_v3(video_ids: string[]): Promise<(Youtu
 
 export async function meta_youtube_video_status_lemmnos(video_ids: string[]): Promise<(YoutubeVideoStatus | string)[]> {
 	assert(video_ids.length <= 50)
-	const resp = await nfetch(`${YT_LEMNOS_URL}/noKey/videos?id=${video_ids.join(',')}&part=short,music`)
+	const resp = await nfetch(`${YT_LEMNOS_URL}/videos?id=${video_ids.join(',')}&part=short,music`)
 
 	if (!resp.ok) {
 		console.error(await resp.text())
@@ -81,20 +81,26 @@ export async function meta_youtube_video_status_lemmnos(video_ids: string[]): Pr
 	}
 	const json = await resp.json() as any
 
+	const result: (YoutubeVideoStatus | string)[] = []
+
 	if (!json.items) {
 		json.items = []
 	}
 
-	const result: (YoutubeVideoStatus | string)[] = []
+	const map = new Map<string, any>()
+	for (const inner of json.items) {
+		map.set(inner.id, inner)
+	}
 
-	let i = 0
 	for (const video_id of video_ids) {
-		const inner = json.items[i]
-		if (!inner || inner.id != video_id) {
+		const inner = map.get(video_id)
+		if (!inner) {
 			result.push(video_id)
 		} else {
-			result.push({ music_available: inner.music.available, short_available: inner.short.available })
-			i++
+			result.push({
+				music_available: inner.music.available,
+				short_available: inner.short.available,
+			})
 		}
 	}
 

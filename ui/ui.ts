@@ -4,6 +4,8 @@ import { route_build, route_merge, route_search, route_select } from './search'
 import { FSRef, Ident } from '../types'
 import { fs_hash_path } from '../fs'
 import { ServerWebSocket } from 'bun'
+import { Index, switch_page } from '.'
+import { route_mergeassist, route_mergetwo } from './mergeassist'
 
 const js = Bun.file('ui/htmx.js')
 
@@ -13,13 +15,15 @@ interface ToString {
 
 const sockets = new Set<ServerWebSocket>()
 
-export function send(st: ToString) {
+export function htmx(st: ToString) {
 	const st_str = st.toString()
 
 	for (const socket of sockets) {
 		socket.sendText(st_str, true)
 	}
 }
+
+// TODO: this sucks but i am so goddamn lazy
 
 export function serve_ui() {
 	Bun.serve<undefined>({
@@ -54,6 +58,22 @@ export function serve_ui() {
 				case '/search': {
 					const data = await req.formData()
 					route_search(String(data.get('search')!), String(data.get('kind')!) as any)
+					return new Response(undefined, { status: 200 })
+				}
+				case '/search_link_tooltip': {
+					switch_page('search_tooltip_link') // switches to search if you're not already on that page
+					const data = await req.formData()
+					route_search(String(data.get('search')!), String(data.get('kind')!) as any)
+					return new Response(undefined, { status: 200 })
+				}
+				case '/mergeassist': {
+					const data = await req.formData()
+					route_mergeassist(String(data.get('kind')!) as any)
+					return new Response(undefined, { status: 200 })
+				}
+				case '/mergetwo': {
+					const data = await req.formData()
+					route_mergetwo(String(data.get('a')!) as any, String(data.get('b')!) as any)
 					return new Response(undefined, { status: 200 })
 				}
 				case '/select': {
@@ -92,6 +112,11 @@ export function serve_ui() {
 						}
 					})
 				}
+				case '/page': {
+					const p = String(url.searchParams.get('p'))
+					switch_page(p as any)
+					return new Response("200 OK", { status: 200 }) 
+				}
 				default: {
 					return new Response("404 Not Found", { status: 404 })
 				}
@@ -100,6 +125,7 @@ export function serve_ui() {
 		websocket: {
 			open(ws) {
 				sockets.add(ws)
+				htmx(Index())
 			},
 			close(ws) {
 				sockets.delete(ws)

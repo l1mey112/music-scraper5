@@ -259,15 +259,18 @@ export function pass_aux_index_youtube_playlist(entries: QueueEntry<string>[]) {
 		const youtube_id = entry.payload
 
 		let videos = await meta_youtube_channel_playlist(youtube_id)
-		videos = videos.filter(video_id => !not_exists($youtube_video, sql`id = ${video_id}`))
+		videos = videos.filter(video_id => not_exists($youtube_video, sql`id = ${video_id}`))
 
 		// be conservative here. only let things in if they're MUSIC
 
 		return db.transaction(async db => {
+			let amt = 0
 			await run_batched_zip(videos, 50, meta_youtube_video_status_lemmnos, (video_id, video) => {
 				if (typeof video === 'string') {
 					return
 				}
+
+				// these two are mutually exclusive
 
 				if (video.short_available) {
 					return
@@ -277,9 +280,11 @@ export function pass_aux_index_youtube_playlist(entries: QueueEntry<string>[]) {
 					return
 				}
 
+				amt += 1
 				queue_dispatch_immediate('track.index_youtube_video', video_id)
 			})
 
+			console.log(`added ${amt} videos from playlist ${youtube_id}`)
 			queue_again_later(entry)
 		})
 	})

@@ -14,9 +14,9 @@ const wal_fd = fs.openSync(fs_wal, 'a')
 
 export function wal_log(log: string, where?: QueueEntry<unknown>) {
 	if (where) {
-		write_log(`log+[${new Date()}](${where.pass}): ${log}`)
+		write_log(`log+[${new Date().toISOString()}](${where.pass}): ${log}`)
 	} else {
-		write_log(`log+[${new Date()}]: ${log}`)
+		write_log(`log+[${new Date().toISOString()}]: ${log}`)
 	}
 }
 

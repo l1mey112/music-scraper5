@@ -9,7 +9,9 @@ if (directive === 'ui') {
 }
 
 try {
-	for await (const status of pass()) {
+	if (directive === 'ui_serve') {
+		serve_ui()
+	} else for await (const status of pass()) {
 		switch (status.kind) {
 			case 'before': {
 				process.stdout.write(`\r${status.pass}...`)
