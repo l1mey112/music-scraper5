@@ -7,6 +7,7 @@ import { htmx } from "./ui"
 type Kind = 'similar_names_ar_al' | 'similar_names_tr'
 
 type Pair = { a: Ident, a_name: string, b: Ident, b_name: string }
+type BarePair = { a: Ident, b: Ident }
 
 const similar_ident_prefix = (prefix: string) => `
 	select distinct a.ident as a, a.text as a_name, b.ident as b, b.text as b_name
@@ -17,27 +18,45 @@ const similar_ident_prefix = (prefix: string) => `
 	and a.text like ('%' || b.text || '%')
 `
 
+// no memo needed for this
 const query_similar_names_ar_al = sqlite.prepare<Pair, []>(`
 	${similar_ident_prefix('ar')}
 	union all
 	${similar_ident_prefix('al')}
 `)
 
-const query_similar_names_tr = sqlite.prepare<Pair, []>(`
+let query_similar_names_tr_stmt_memo: Pair[] | null = null
+const query_similar_names_tr_stmt = sqlite.prepare<Pair, []>(`
 	${similar_ident_prefix('tr')}
 `)
 
-export function route_mergetwo(a: Ident, b: Ident) {
-	const kind = ident_classify(a)
-	assert(kind === ident_classify(b))
+function query_similar_names_tr_memo_remove(pair: BarePair) {
+	query_similar_names_tr_stmt_memo = query_similar_names_tr_stmt_memo!.filter(p => p.a !== pair.a && p.b !== pair.b)
+}
+
+// use a memo
+function query_similar_names_tr_memo() {
+	if (query_similar_names_tr_stmt_memo === null) {
+		query_similar_names_tr_stmt_memo = query_similar_names_tr_stmt.all()
+	}
+	return query_similar_names_tr_stmt_memo
+}
+
+export function route_mergetwo(kind: Kind, a: Ident, b: Ident) {
+	const ident_kind = ident_classify(a)
+	assert(ident_kind === ident_classify(b))
 	
 	console.log(a, b)
 
 	const id1 = ident_id(a)
 	const id2 = ident_id(b)
-	merge(kind, id1, id2)
+	merge(ident_kind, id1, id2)
 
-	route_mergeassist() // TODO: need a better way to reload
+	if (ident_kind == 'track_id') {
+		query_similar_names_tr_memo_remove({ a, b })
+	}
+
+	route_mergeassist(kind)
 }
 
 export function route_mergeassist(kind: Kind = 'similar_names_ar_al') {
@@ -49,7 +68,7 @@ export function route_mergeassist(kind: Kind = 'similar_names_ar_al') {
 			break
 		}
 		case 'similar_names_tr': {
-			pairs = query_similar_names_tr.all()
+			pairs = query_similar_names_tr_memo()
 			break
 		}
 		default: {
@@ -65,7 +84,7 @@ export function route_mergeassist(kind: Kind = 'similar_names_ar_al') {
 			<b>{IdentTooltip(a)} and {IdentTooltip(b)}</b>
 		</>
 
-		const hx_vals = JSON.stringify({a, b})
+		const hx_vals = JSON.stringify({ kind, a, b })
 
 		const corner = <pre style="padding: 1em; cursor: pointer;" class="box" hx-post="/mergetwo" hx-swap="none" hx-vals={hx_vals} hx-trigger="click">
 			merge

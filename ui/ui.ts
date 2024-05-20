@@ -73,7 +73,7 @@ export function serve_ui() {
 				}
 				case '/mergetwo': {
 					const data = await req.formData()
-					route_mergetwo(String(data.get('a')!) as any, String(data.get('b')!) as any)
+					route_mergetwo(String(data.get('kind')!) as any, String(data.get('a')!) as any, String(data.get('b')!) as any)
 					return new Response(undefined, { status: 200 })
 				}
 				case '/select': {
