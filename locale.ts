@@ -25,9 +25,9 @@ export function locale_script_equal(to: Locale, foreign: Locale): boolean {
 	if (to == foreign) {
 		return true
 	}
-	
-	const map: Record<string, Locale> = {
-		'ja-latn': 'en' as Locale,
+
+	const map: Record<string, Script> = {
+		'ja-latn': 'en' as Script,
 	}
 
 	const mapped = map[foreign]
@@ -47,14 +47,14 @@ export function locale_current(): Locale {
 	if (_locale_current) {
 		return _locale_current
 	}
-	
+
 	const locale_entry = db.select({ data: $kv_store.data })
 		.from($kv_store)
 		.where(sql`kind = 'locale'`)
 		.get() as { data: Locale } | undefined
 
 	let locale
-		
+
 	if (!locale_entry) {
 		// insert into db
 		db.insert($kv_store)

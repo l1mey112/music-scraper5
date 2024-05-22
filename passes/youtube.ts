@@ -5,7 +5,7 @@ import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retr
 import { image_queue_immutable_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, not_exists, get_ident_or_new, get_ident } from "../pass_misc"
 import { $youtube_channel, $youtube_video } from "../schema"
 import { ArtistId, Ident, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
-import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_playlist, meta_youtube_channel_v3, meta_youtube_video_is_short, meta_youtube_video_v3 } from "./youtube_api"
+import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_playlist, meta_youtube_channel_v3, meta_youtube_video_is_short, meta_youtube_video_status_lemmnos, meta_youtube_video_v3 } from "./youtube_api"
 
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
 	let largest: YoutubeImage | undefined = undefined
@@ -38,7 +38,7 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 	return run_batched_zip(entries, 50, batch_fn, (entry, video) => {
 		// not found, retry again later
 		if (typeof video === 'string') {
-			queue_retry_failed(entry)
+			queue_retry_failed(entry, `video not found (${entry.payload})`)
 			return
 		}
 
@@ -155,7 +155,7 @@ export function pass_artist_index_youtube_channel(entries: QueueEntry<string>[])
 	return run_batched_zip(entries, 50, batch_fn, (entry, channel) => {
 		// not found, retry again later
 		if (typeof channel === 'string') {
-			queue_retry_failed(entry)
+			queue_retry_failed(entry, `channel not found (${entry.payload})`)
 			return
 		}
 
@@ -255,32 +255,36 @@ export function pass_aux_youtube_channel0(entries: QueueEntry<string>[]) {
 
 // aux.index_youtube_playlist
 export function pass_aux_index_youtube_playlist(entries: QueueEntry<string>[]) {
-	return run_with_concurrency_limit(entries, 12, async (entry) => {
+	return run_with_concurrency_limit(entries, 8, async (entry) => {
 		const youtube_id = entry.payload
 
-		const videos = await meta_youtube_channel_playlist(youtube_id)
+		let videos = await meta_youtube_channel_playlist(youtube_id)
+		videos = videos.filter(video_id => not_exists($youtube_video, sql`id = ${video_id}`))
 
-		await run_with_concurrency_limit(videos.entries(), 16, async ([i, video_id]) => {
-			if (!not_exists($youtube_video, sql`id = ${video_id}`)) {
-				delete videos[i]
-				return
-			}
-			if (await meta_youtube_video_is_short(video_id)) {
-				delete videos[i]
-			}
-		})
+		// be conservative here. only let things in if they're MUSIC
 
-		// videos: (string | undefined)[]
-
-		db.transaction(db => {
-			for (const video_id of videos) {
-				if (video_id) {
-					queue_dispatch_immediate('track.index_youtube_video', video_id)
+		return db.transaction(async db => {
+			let amt = 0
+			await run_batched_zip(videos, 50, meta_youtube_video_status_lemmnos, (video_id, video) => {
+				if (typeof video === 'string') {
+					return
 				}
-			}
-			console.log(`queued ${videos.length} videos from playlist ${youtube_id}`)
 
-			// another day
+				// these two are mutually exclusive
+
+				if (video.short_available) {
+					return
+				}
+
+				if (!video.music_available) {
+					return
+				}
+
+				amt += 1
+				queue_dispatch_immediate('track.index_youtube_video', video_id)
+			})
+
+			console.log(`added ${amt} videos from playlist ${youtube_id}`)
 			queue_again_later(entry)
 		})
 	})

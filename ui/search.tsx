@@ -2,8 +2,9 @@ import { sqlite } from "../db"
 import { AlbumId, ArtistId, FSRef, Ident, ImageKind, Locale, TrackId, image_kind_tostring } from "../types"
 import { ArticleKind, assert, ident_classify, ident_classify_fallable, ident_id, ident_make, merge, run_with_concurrency_limit } from "../pass_misc"
 import { snowflake_timestamp } from "../ids"
-import { send as htmx } from "./ui"
+import { htmx } from "./ui"
 import { build_album, build_single, ident_image_from, ident_name_from } from "../build"
+import { Box, TooltipIdent } from "./Box"
 
 const selected = new Set<Ident>()
 
@@ -150,28 +151,10 @@ const artist_search = select_from('artist')
 // preview audio
 // collaborators on the piece of media
 
-function tooltip_ident(ident: Ident, text: string) {
-	return <a hx-target="#search-results" hx-post="/search" hx-vals={`{"search":"${ident}","kind":"ident"}`}><span class="tooltip" data-tooltip title={ident}>{text}</span></a>
-}
-
-function Box({ ident }: { ident: Ident }) {
-	const id = ident_id(ident)
-	const date = snowflake_timestamp(id)
+function FromBox({ ident }: { ident: Ident }) {
 	let name = ident_name_from(ident)
 	const image = ident_image_from(ident)
-
 	const kind = ident_classify(ident)
-
-	// return <div class="box">name: {name(ident)}</div>
-	// name on left, everything else on right
-	// use float
-
-	let image_html
-	if (image) {
-		image_html = <img loading="lazy" src={`/media?q=${image.hash}`} alt={image_kind_tostring(image.kind)} />
-	} else {
-		image_html = <pre style="padding: 1em;" >No Image</pre>
-	}
 
 	let collaborators_elem: JSX.Element | undefined
 	if (kind === 'track_id') {
@@ -181,7 +164,7 @@ function Box({ ident }: { ident: Ident }) {
 		// name2, name1
 		for (let i = 0; i < collaborators.length; i++) {
 			const name = ident_name_from(collaborators[i])
-			collaborators_html.push(tooltip_ident(collaborators[i], name))
+			collaborators_html.push(TooltipIdent(collaborators[i], name))
 		}
 
 		collaborators_elem = <pre>{collaborators_html.join(', ')}</pre>
@@ -193,13 +176,13 @@ function Box({ ident }: { ident: Ident }) {
 		// 2. name1
 		for (let i = 0; i < collaborators.length; i++) {
 			const name = ident_name_from(collaborators[i])
-			collaborators_html.push(<pre>{tooltip_ident(collaborators[i], `${i + 1}. ${name}`)}</pre>)
+			collaborators_html.push(<pre>{TooltipIdent(collaborators[i], `${i + 1}. ${name}`)}</pre>)
 		}
 
 		collaborators_elem = <>{...collaborators_html}</>
 	} else {
 		const { album_ids, track_ids } = unwrap_artists_media(ident_id<ArtistId>(ident))
-		
+
 		const collaborators_html: JSX.Element[] = []
 
 		if (album_ids.length > 0) {
@@ -207,9 +190,9 @@ function Box({ ident }: { ident: Ident }) {
 
 			for (let i = 0; i < album_ids.length; i++) {
 				const ident = ident_make(album_ids[i], 'album_id')
-				
+
 				const name = ident_name_from(ident)
-				collaborators_html.push(<pre>{tooltip_ident(ident, `${i + 1}. ${name}`)}</pre>)
+				collaborators_html.push(<pre>{TooltipIdent(ident, `${i + 1}. ${name}`)}</pre>)
 			}
 		}
 
@@ -218,9 +201,9 @@ function Box({ ident }: { ident: Ident }) {
 
 			for (let i = 0; i < track_ids.length; i++) {
 				const ident = ident_make(track_ids[i], 'track_id')
-				
+
 				const name = ident_name_from(ident)
-				collaborators_html.push(<pre>{tooltip_ident(ident, `${i + 1}. ${name}`)}</pre>)
+				collaborators_html.push(<pre>{TooltipIdent(ident, `${i + 1}. ${name}`)}</pre>)
 			}
 		}
 
@@ -229,16 +212,15 @@ function Box({ ident }: { ident: Ident }) {
 
 	const is_selected = selected.has(ident)
 	const invert_vals = is_selected ? `{"ident":"${ident}"}` : `{"ident":"${ident}","state":"on"}`
-	return <article class={is_selected ? 'selected' : ''} id={ident}>
-		<header>
-			<pre hx-post="/select" hx-swap="none" hx-vals={invert_vals} hx-trigger="click" style="cursor: pointer;">{name}</pre>
-			<b>{ident} <span class="tooltip" data-tooltip title={date.toString()}>[?]</span></b>
-			{collaborators_elem && <><hr />{collaborators_elem}</>}
-		</header>
-		<div>
-			{image_html}
-		</div>
-	</article>
+
+	return Box({
+		name,
+		is_selected,
+		ident,
+		collaborators: collaborators_elem,
+		image_hash: image?.hash,
+		onclick: { htmx_json_vals: invert_vals }
+	})
 }
 
 let currently_building = false
@@ -370,7 +352,7 @@ function route_select_rendender() {
 
 	function output_map(ident: Ident) {
 		const name = ident_name_from(ident)
-		return <div class="nbox">{tooltip_ident(ident, name)}</div>
+		return <div class="nbox">{TooltipIdent(ident, name)}</div>
 	}
 
 	// what an ugly solution
@@ -399,7 +381,7 @@ function route_select_clear() {
 	selected.clear()
 
 	for (const ident of idents) {
-		htmx(Box({ ident })) // rerender
+		htmx(FromBox({ ident })) // rerender
 	}
 
 	route_select_rendender()
@@ -415,7 +397,7 @@ export function route_select(ident: Ident, state: boolean) {
 	}
 
 	// rerender box
-	htmx(Box({ ident }))
+	htmx(FromBox({ ident }))
 
 	route_select_rendender()
 }
@@ -450,7 +432,7 @@ export function route_search(search: string, kind: Kind) {
 	}
 
 	const output = <div id="search-results" class="flex-container">
-		{...idents.map(ident => <Box ident={ident} />)}
+		{...idents.map(ident => <FromBox ident={ident} />)}
 	</div>
 
 	htmx(output)

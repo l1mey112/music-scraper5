@@ -6,227 +6,7 @@ import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, Lin
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
 import { queue_dispatch_immediate } from "./pass"
-
-// QUERY PLAN
-// `--SEARCH queue USING INDEX queue.idx0 (expiry<?)
-/* const stmt_search = sqlite.prepare<{ rowid: number, target: Ident | '', payload: string }, [number, QueueCmdHashed]>(`
-	select rowid, target, payload from queue
-	where expiry < ? and cmd = ?
-	order by expiry asc
-`)
-
-export function queue_pop<T = unknown>(cmd: QueueCmd): QueueEntry<T>[] {
-	const entries = stmt_search.all(Date.now(), queue_hash_cmd(cmd))
-
-	const nentries = entries.map(it => {
-		return {
-			...it,
-			target: it.target === '' ? undefined : it.target,
-			payload: JSON.parse(it.payload) as T,
-			cmd,
-		}
-	})
-
-	return nentries
-} */
-
-// mutate the existing queue entry to retry later
-// increments `retry_count` which can be used to determine if the entry should be removed after manual review
-/* export function queue_retry_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
-	db.update($queue)
-		.set({ expiry: Date.now() + expiry_after_millis, try_count: sql`${$queue.try_count} + 1` })
-		.where(sql`rowid = ${entry.rowid}`)
-		.run()
-}
-
-// mutate the existing queue entry to retry later
-// doesn't increment `retry_count`, this function is for steady retries
-export function queue_again_later(entry: QueueEntry, expiry_after_millis: number = DAY) {
-	db.update($queue)
-		.set({ expiry: Date.now() + expiry_after_millis })
-		.where(sql`rowid = ${entry.rowid}`)
-		.run()
-}
-
-// remove the queue entry as it is completed
-export function queue_complete(entry: QueueEntry) {
-	db.delete($queue)
-		.where(sql`rowid = ${entry.rowid}`)
-		.run()
-}
-
-// just use cityhash32, its good enough
-function queue_hash_cmd(cmd: QueueCmd): PassHashed {
-	return Bun.hash.cityHash32(cmd) as PassHashed
-}
-
-type ArticleKind = 'track_id' | 'album_id' | 'artist_id'
-
-// only nonnull when command is *.new.*
-const cmd_desc: Record<QueueCmd, [SQLiteTable, ArticleKind] | null> = {
-	'track.new.youtube_video': [$youtube_video, 'track_id'],
-	'track.new.spotify_track': [$spotify_track, 'track_id'],
-	'image.download.image_url': null,
-	'artist.new.youtube_channel': [$youtube_channel, 'artist_id'],
-	'album.new.spotify_album': [$spotify_album, 'album_id'],
-	'artist.new.spotify_artist': [$spotify_artist, 'artist_id'],
-	'artist.meta.spotify_artist_supplementary': null,
-}
-
-const kind_desc: Record<ArticleKind, SQLiteTable> = {
-	track_id: $track,
-	album_id: $album,
-	artist_id: $artist,
-}
-
-function queue_identify_exiting_target(cmd: QueueCmd, payload: any): Ident | undefined {
-	const desc = cmd_desc[cmd]
-	assert(desc !== undefined, `inexhaustive match (${cmd})`)
-
-	if (desc) {
-		// the above types of commands only have a string payload
-		assert(typeof payload === 'string')
-
-		const [table, col] = desc
-
-		const sel = db.select({ target: sql<Snowflake>`${sql.identifier(col)}` })
-			.from(table)
-			.where(sql`id = ${payload}`)
-			.get()
-
-		if (sel) {
-			return ident_make(sel.target, col)
-		}
-	}
-}
-
-// dispatch a command to be executed immediately
-// returning the target ident, which may or may not exist
-// work entries dispatched by other entries should use this function to avoid infinite loops
-export function queue_dispatch_chain_returning(cmd: QueueCmd, payload: any): Ident {
-	let target: Ident | undefined = queue_identify_exiting_target(cmd, payload)
-
-	if (target) {
-		return target
-	}
-
-	if (!target) {
-		// find existing commands with target
-
-		const sel = db.select({ target: $queue.target })
-			.from($queue)
-			.where(sql`cmd = ${queue_hash_cmd(cmd)} and target != '' and payload = ${JSON.stringify(payload)}`)
-			.get()
-
-		if (sel) {
-			return sel.target
-		}
-	}
-
-	if (!target) {
-		const desc = cmd_desc[cmd]
-		assert(desc !== undefined, `inexhaustive match (${cmd})`)
-		assert(desc !== null, 'command does not create anything')
-
-		const [_, col] = desc
-
-		target = ident_make(snowflake(), col)
-	}
-
-	queue_dispatch_immediate(cmd, payload, target)
-
-	return target
-}
-
-function verify_new_target(pass: PassIdentifier) {
-	const comp = pass.split('.')
-
-	assert(comp[1] === 'new', `pass must be a new pass (${pass})`)
-}
-
-export function queue_known_pass(pass: string): pass is PassIdentifier {
-	for (const i of known_pass_identifiers) {
-		if (pass === i) {
-			return true
-		}
-	}
-	return false
-}
-
-// dispatch a command to be executed immediately
-// work entries dispatched by other entries should use this function to avoid infinite loops
-// won't also reset expiry or try counts
-export function queue_dispatch_seed(cmd: QueueCmd, payload: any, target?: Ident) {
-	if (!target) {
-		verify_new_target(cmd)
-	}
-
-	if (queue_identify_exiting_target(cmd, payload)) {
-		return
-	}
-
-	db.insert($queue)
-		.values({ cmd: queue_hash_cmd(cmd), target, payload })
-		.onConflictDoNothing()
-		.run()
-}
-
-// dispatch a command to be executed immediately
-// work entries dispatched by other entries should use this function to avoid infinite loops
-export function queue_dispatch_chain_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
-	if (!target) {
-		verify_new_target(cmd)
-	}
-
-	if (queue_identify_exiting_target(cmd, payload)) {
-		return
-	}
-
-	db.insert($queue)
-		.values({ cmd: queue_hash_cmd(cmd), target, payload })
-		.onConflictDoUpdate({
-			target: [$queue.target, $queue.pass, $queue.payload],
-			set: {
-				expiry: 0,
-				try_count: 0,
-			}
-		})
-		.run()
-}
-
-// dispatch a command to be executed immediately
-export function queue_dispatch_immediate(cmd: QueueCmd, payload: any, target?: Ident) {
-	if (!target) {
-		verify_new_target(cmd)
-	}
-
-	target ??= queue_identify_exiting_target(cmd, payload)
-
-	db.insert($queue)
-		.values({ cmd: queue_hash_cmd(cmd), target, payload })
-		.onConflictDoUpdate({
-			target: [$queue.target, $queue.pass, $queue.payload],
-			set: {
-				expiry: 0,
-				try_count: 0,
-			}
-		})
-		.run()
-}
-
-// dispatch a command to be executed after a certain amount of time
-export function queue_dispatch_later(cmd: QueueCmd, payload: any, target: Ident, expiry_after_millis: number) {	
-	db.insert($queue)
-		.values({ cmd: queue_hash_cmd(cmd), target, payload, expiry: Date.now() + expiry_after_millis })
-		.onConflictDoUpdate({
-			target: [$queue.target, $queue.pass, $queue.payload],
-			set: {
-				expiry: Date.now() + expiry_after_millis,
-				try_count: 0,
-			}
-		})
-		.run()
-} */
+import { wal_link } from "./wal"
 
 export function not_exists<T>(table: SQLiteTable, cond: SQL) {
 	return db.select({ _: sql`1` })
@@ -255,7 +35,7 @@ function object_has_any(data: any): boolean {
 	if (typeof data !== 'object') {
 		return false
 	}
-	
+
 	for (const i in data) {
 		if (data[i] !== undefined && data[i] !== null) {
 			return true
@@ -311,7 +91,6 @@ export function get_ident_or_new<T extends ArticleKind>(preferred_time: number |
 
 				console.log(`get_ident_or_new: retrying (seq: ${seq})`, id)
 			}
-			console.log(`get_ident_or_new: created`, id, new Date(preferred_time), kind, aux)
 		} else {
 			id = snowflake_id() as KindToId[T]
 		}
@@ -351,6 +130,54 @@ export function get_ident<T extends ArticleKind>(foreign_id: string, foreign_tab
 	assert(a, `foreign key not found (${foreign_id})`)
 
 	return [ident_make(a.id, kind), a.id]
+}
+
+export function ident_link_command(ident: Ident): string {
+	let thirdparty: [prefix: string, SQLiteTable][]
+
+	const kind = ident_classify(ident)
+	const prefix = ident_prefix(ident)
+	const id = ident_id(ident)
+
+	switch (kind) {
+		case 'track_id': {
+			thirdparty = [
+				['yt', $youtube_video],
+				['sp', $spotify_track],
+			]
+			break
+		}
+		case 'album_id': {
+			thirdparty = [
+				['sp', $spotify_album],
+			]
+			break
+		}
+		case 'artist_id': {
+			thirdparty = [
+				['yt', $youtube_channel],
+				['sp', $spotify_artist],
+			]
+			break
+		}
+	}
+
+	// {ident_prefix}.{thirdparty_prefix}:xxxxxxxxxxx, ...
+
+	const components = []
+
+	for (const [prefix, table] of thirdparty) {
+		const a = db.select({ id: sql`id` })
+			.from(table)
+			.where(sql`${sql.identifier(kind)} = ${id}`)
+			.all()
+
+		for (const i of a) {
+			components.push(`${prefix}:${i.id}`)
+		}
+	}
+
+	return `${prefix}.${components.join(',')}`
 }
 
 export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: KindToId[T]) {
@@ -441,10 +268,14 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 				const first_artist = mapping_ids.shift()
 
 				if (first_artist) {
-					db.update($track_artist)
-						.set({ artist_id: id1 as ArtistId })
-						.where(sql`id = ${first_artist}`)
-						.run()
+					try {
+						db.update($track_artist)
+							.set({ artist_id: id1 as ArtistId })
+							.where(sql`id = ${first_artist}`)
+							.run()
+					} catch {
+						// ignore
+					}
 				}
 
 				for (const attribute_map of mapping_ids) {
@@ -527,6 +358,9 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 				.onConflictDoNothing()
 				.run()
 		}
+
+		// log the merge
+		wal_link(ident1)
 	})
 }
 
@@ -573,7 +407,7 @@ export function link_select(kind: Link[] | Link = Link["Unknown URL"]): (LinkEnt
 	if (!(kind instanceof Array)) {
 		kind = [kind]
 	}
-	
+
 	const k = db.select({
 		rowid: rowId(),
 		ident: $external_links.ident,
@@ -700,6 +534,10 @@ export function ident_id<T extends TrackId | AlbumId | ArtistId>(id: Ident): T {
 	return Number(id.slice(2)) as T
 }
 
+export function ident_prefix(id: Ident): 'tr' | 'al' | 'ar' {
+	return id.slice(0, 2) as 'tr' | 'al' | 'ar'
+}
+
 export function ident_classify(ident: Ident | string): ArticleKind {
 	assert(ident.length >= 3)
 	switch (ident.slice(0, 2)) {
@@ -718,7 +556,7 @@ export function ident_classify_fallable(ident: Ident | string): ArticleKind | un
 	if (ident.length < 3) {
 		return
 	}
-	
+
 	switch (ident.slice(0, 2)) {
 		case 'tr':
 			return 'track_id'
@@ -793,6 +631,7 @@ export async function run_batched_zip<T, O>(arr: T[], batch_size: number, batch_
 
 export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrency_limit: number, next: (v: T) => Promise<void>) {
 	const active_promises: Promise<void>[] = []
+	let has_error = false
 
 	for (const item of arr) {
 		// wait until there's room for a new operation
@@ -800,7 +639,10 @@ export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrenc
 			await Promise.race(active_promises)
 		}
 
-		const next_operation = next(item)
+		const next_operation = next(item).catch(err => {
+			has_error = true
+			throw err
+		})
 		active_promises.push(next_operation)
 
 		next_operation.finally(() => {
@@ -809,11 +651,30 @@ export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrenc
 				active_promises.splice(index, 1)
 			}
 		})
+
+		if (has_error) {
+			break
+		}
 	}
 
 	// wait for all active operations to complete
 	await Promise.all(active_promises)
 }
+
+// functions equivalently to run_with_concurrency_limit, but with a fail limit
+/* export async function run_with_concurrency_limit_with_abort<T>(arr: Iterable<T>, concurrency_limit: number, fail_limit: number, next: (v: T) => Promise<boolean>): Promise<boolean> {
+	const active_promises: Promise<boolean>[] = []
+
+	let failed = 0
+
+	for (const item of arr) {
+		if (failed >= fail_limit) {
+			return false
+		}
+
+		// wait until there's room for a new operation
+		while (active_promises.length >= concurrency_limit) {
+			await Promise */
 
 export function assert(condition: any, message?: string): asserts condition {
 	if (!condition) {

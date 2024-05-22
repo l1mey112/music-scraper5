@@ -3,6 +3,7 @@ import { PassArticle, PassIdentifier, PassIdentifierPayload, PassIdentifierTempl
 import { db } from "./db"
 import { $queue } from "./schema"
 import { sql } from "drizzle-orm"
+import { wal_pass_fatal } from "./wal"
 
 class PassStopException extends Error {
 	constructor(message: string) {
@@ -10,7 +11,7 @@ class PassStopException extends Error {
 	}
 }
 
-function pass_hash(pass: PassIdentifier): PassHashed {
+export function pass_hash(pass: PassIdentifier): PassHashed {
 	const [article, name] = pass.split('.')
 	const idx = pass_article_kinds.indexOf(article as PassArticle)
 
@@ -76,11 +77,12 @@ export function queue_dispatch_immediate<T extends PassIdentifier>(pass: T, payl
 
 // mutate the existing queue entry to retry later
 // increments `retry_count` which can be used to determine if the entry should be removed after manual review
-export function queue_retry_failed(entry: QueueEntry<unknown>, expiry_after_millis: number = DAY) {
+export function queue_retry_failed(entry: QueueEntry<unknown>, error: string, expiry_after_millis: number = DAY) {
 	db.update($queue)
 		.set({ expiry: Date.now() + expiry_after_millis, try_count: sql`${$queue.try_count} + 1` })
 		.where(sql`id = ${entry.id}`)
 		.run()
+	wal_pass_fatal(entry, error)
 }
 
 // mutate the existing queue entry to retry later
@@ -152,7 +154,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 							pass: name,
 						}
 					})
-					
+
 					yield {
 						kind: 'before',
 						pass: name,

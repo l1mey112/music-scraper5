@@ -47,7 +47,7 @@ export async function pass_link_extrapolate_from_linkcore() {
 			link_kill(link)
 			return
 		}
-		
+
 		html_extractor.transform(await resp.text())
 
 		db.transaction(db => {
@@ -63,7 +63,7 @@ export async function pass_link_extrapolate_from_linkcore() {
 // link.extrapolate.from_lnk_to
 export async function pass_link_extrapolate_from_lnk_to() {
 	const kinds = [Link['Linkfire (lnk.to)'], Link["Linkfire Composite (lnk.to)"]]
-	
+
 	let updated = false
 	const k = link_select(kinds)
 
@@ -105,7 +105,7 @@ export async function pass_link_extrapolate_from_lnk_to() {
 			link_kill(link)
 			return
 		}
-		
+
 		html_extractor.transform(await resp.text())
 
 		db.transaction(db => {

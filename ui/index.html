@@ -29,7 +29,7 @@
 			width: 1px;
 			background-color: #2d2e2e;
 		}
-		.enclosure {
+		.enclosure, #index {
 			flex: 1;
 			padding: 1em;
 			overflow-y: auto;
@@ -148,27 +148,7 @@
 	</style>
 </head>
 <body hx-ext="ws, remove-me" ws-connect="/ws">
-	<div class="enclosure">
-		<div class="box">
-			<div id="search-container">
-				<form hx-swap="none">
-					<input type="search" name="search" placeholder="Search..."
-						hx-trigger="input changed delay:100ms, search, load"
-						hx-post="/search">
-					<select hx-trigger="input" hx-post="/search" name="kind">
-						<option value="track">Track</option>
-						<option value="track_by_artists">Track By Artists</option>
-						<option value="album">Album</option>
-						<option value="artist">Artist</option>
-						<option value="ident">Ident</option>
-					</select>
-				</form>
-			</div>
-		</div>
-		<div id="select-results"></div>
-		<hr>
-		<div id="search-results" class="flex-container"></div>
-	</div>
+	<div id="index"></div>
 	<script>
 		addEventListener('htmx:error', function(event) {
 			location.reload()

@@ -4,7 +4,7 @@ import { fs_hash_path } from "../fs"
 import { db } from "../db"
 import { $source } from "../schema"
 import { sql } from "drizzle-orm"
-import { run_with_concurrency_limit } from "../pass_misc"
+import { assert, run_with_concurrency_limit } from "../pass_misc"
 import { queue_complete } from "../pass"
 
 // source.classify_chromaprint
@@ -26,7 +26,8 @@ export function pass_source_classify_chromaprint(entries: QueueEntry<FSRef>[]) {
 				queue_complete(entry) // don't retry
 				return
 			}
-			throw new Error(`fpcalc failed(${entry.payload}): ${fpcalc.stderr}`)
+			// this shouldn't fail
+			assert(false, `fpcalc failed(${entry.payload}): ${fpcalc.stderr}`)
 		}
 
 		const json: FpCalc = fpcalc.json()

@@ -5,48 +5,19 @@ import { pass_exception } from "./pass"
 import { AccessToken, SpotifyApi, UserProfile } from "@spotify/web-api-ts-sdk"
 import { nfetch } from "./fetch"
 import { atexit } from "./atexit"
+import { fs_root_path } from "./fs"
 
-export type CredentialKind = keyof CredentialStore
-type CredentialStore = {
-	'spotify_api': [string, string][] // [client_id, client_secret]
-	'deezer_arl': [string][]
-	'spotify_dl_user': [string, string][] // [username, password]
+export type PersistentCredentialKind = keyof PersistentCredentialStore
+type PersistentCredentialStore = {
 	'spotify_user': AccessToken[]
 }
 
-/* type CredentialProp = {
-	kind: CredentialKind
-	title: string
-	names: string[]
-	tooltip?: string
-}
-
-const credential_props: CredentialProp[] = [
-	{
-		kind: 'spotify',
-		title: 'Spotify API Credentials',
-		names: ['Client ID', 'Client Secret'],
-		tooltip: 'assumes a default redirect URI of http://localhost:8080/callback',
-	},
-	{
-		kind: 'deezer_arl',
-		title: 'Deezer ARL Token',
-		names: ['ARL Token'],
-	},
-	{
-		kind: 'spotify_dl_user',
-		title: 'Spotify Download User',
-		names: ['Username/Email', 'Password'],
-		tooltip: 'use a throwaway account, preferably non premium',
-	},
-] */
-
-function cred_get<T extends CredentialKind>(kind: T): CredentialStore[T] {
+function persistent_cred_get<T extends PersistentCredentialKind>(kind: T): PersistentCredentialStore[T] {
 	const cred = db.select({ data: $kv_store.data })
 		.from($kv_store)
 		.where(sql`kind = ${`cred.${kind}`}`)
-		.get() as { data: CredentialStore[T] } | undefined
-	
+		.get() as { data: PersistentCredentialStore[T] } | undefined
+
 	if (!cred) {
 		return []
 	}
@@ -54,7 +25,7 @@ function cred_get<T extends CredentialKind>(kind: T): CredentialStore[T] {
 	return cred.data
 }
 
-function cred_store<T extends CredentialKind>(kind: T, data: CredentialStore[T]) {
+function persistent_cred_store<T extends PersistentCredentialKind>(kind: T, data: PersistentCredentialStore[T]) {
 	db.insert($kv_store)
 		.values({ kind: `cred.${kind}`, data })
 		.onConflictDoUpdate({
@@ -65,8 +36,8 @@ function cred_store<T extends CredentialKind>(kind: T, data: CredentialStore[T])
 }
 
 // must be called inside a pass, throws PassStopException if cred not found
-function pass_cred_assert<T extends CredentialKind>(kind: T): CredentialStore[T] {
-	const datum = cred_get(kind)
+function pass_persistent_cred_assert<T extends PersistentCredentialKind>(kind: T): PersistentCredentialStore[T] {
+	const datum = persistent_cred_get(kind)
 
 	if (datum.length === 0) {
 		pass_exception(`[cred_get] ${kind} not found`)
@@ -74,8 +45,6 @@ function pass_cred_assert<T extends CredentialKind>(kind: T): CredentialStore[T]
 
 	return datum
 }
-
-let _spotify_api: SpotifyApi
 
 // fuckit
 const scopes = [
@@ -102,18 +71,6 @@ const spotify_config = {
 	fetch: nfetch,
 }
 
-export function pass_spotify_api(): SpotifyApi {
-	if (_spotify_api) {
-		return _spotify_api
-	}
-
-	const [[client_id, client_secret], ] = pass_cred_assert('spotify_api')
-
-	_spotify_api = SpotifyApi.withClientCredentials(client_id, client_secret, scopes, spotify_config)
-
-	return _spotify_api
-}
-
 let _spotify_user: [SpotifyApi, UserProfile] | undefined
 
 atexit(async () => {	
@@ -121,7 +78,7 @@ atexit(async () => {
 		const token = await _spotify_user[0].getAccessToken()
 
 		if (token) {
-			cred_store('spotify_user', [token])
+			persistent_cred_store('spotify_user', [token])
 		}
 	}
 })
@@ -132,9 +89,9 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 	}
 
 	const client_redirect_uri = 'http://localhost:8080/callback'
-	const [[client_id, client_secret], ] = pass_cred_assert('spotify_api')
+	const [client_id, client_secret] = spotify_api_cred()
 
-	const [access_token, ] = cred_get('spotify_user')
+	const [access_token, ] = persistent_cred_get('spotify_user')
 
 	if (access_token) {
 		// TODO: duplicated code
@@ -223,6 +180,28 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 	return _spotify_user
 }
 
-export function pass_zotify_credentials(): [string, string] {
-	return pass_cred_assert('spotify_dl_user')[0]
+async function make_round_robin<T>(fp: string) {
+	const json: T[] = await Bun.file(fp).json()
+
+	let idx = 0
+	return () => {
+		const ret = json[idx]
+		idx = (idx + 1) % json.length
+		return ret
+	}
+}
+
+const spotify_api_cred = await make_round_robin<[client_id: string, client_secret: string]>(fs_root_path('spotify_api_cred_list.json'))
+const spotify_user_cred = await make_round_robin<[username: string, password: string]>(fs_root_path('spotify_user_cred_list.json'))
+
+// round robin
+export function pass_new_zotify_credentials(): [username: string, password: string] {
+	return spotify_user_cred()
+}
+
+// round robin
+export function pass_new_spotify_api(): SpotifyApi {
+	const [client_id, client_secret] = spotify_api_cred()
+	const api = SpotifyApi.withClientCredentials(client_id, client_secret, scopes, spotify_config)
+	return api
 }

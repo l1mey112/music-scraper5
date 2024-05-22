@@ -1,11 +1,13 @@
-import { sql } from "drizzle-orm";
-import { db } from "./db";
-import { fs_root } from "./fs";
-import { not_exists } from "./pass_misc";
-import { $youtube_channel, $youtube_video } from "./schema";
-import { queue_dispatch_immediate } from "./pass";
-import { pass_spotify_user } from "./cred";
-import { MaybePromise } from "./types";
+#!/usr/bin/env bun
+
+import { sql } from "drizzle-orm"
+import { db } from "../db"
+import { fs_root } from "../fs"
+import { not_exists } from "../pass_misc"
+import { $youtube_channel, $youtube_video } from "../schema"
+import { queue_dispatch_immediate } from "../pass"
+import { pass_spotify_user } from "../cred"
+import { MaybePromise } from "../types"
 
 function seed_youtube_video(id: string) {
 	if (not_exists($youtube_video, sql`id = ${id}`)) {
@@ -22,7 +24,6 @@ function seed_youtube_channel(id: string) {
 	//                        ^^
 	// reol uploads playlist: UUB6pJFaFByws3dQj4AdLdyA
 	//                        ^^
-	//
 	// https://www.youtube.com/playlist?list=UUB6pJFaFByws3dQj4AdLdyA
 	//                                       ^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -57,34 +58,36 @@ const seedto: Record<string, (id: string) => MaybePromise<void>> = {
 	'spotify_user.seed': seed_spotify_user,
 }
 
-export async function seed_root() {
+async function seed_root() {
 	for (const seed in seedto) {
 		const pass_entry = seedto[seed]
 		const fp = `${fs_root}/${seed}`
 		const file = Bun.file(fp)
-	
+
 		if (!await file.exists()) {
 			continue
 		}
-	
+
 		// i would like a lines() API bun.
 		const text = await file.text()
 		const lines = text.split('\n')
-	
+
 		await db.transaction(async db => {
 			// list of payloads separated by line
 			for (let line of lines) {
 				line = line.split('#', 1)[0]
 				line = line.trim()
-	
+
 				if (line.length === 0) {
 					continue
 				}
-	
+
 				await pass_entry(line)
 			}
 		})
-	
+
 		console.log(`seed file: ${seed} (${lines.length} commands)`)
 	}
 }
+
+await seed_root()
