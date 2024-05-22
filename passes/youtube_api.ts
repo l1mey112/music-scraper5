@@ -53,7 +53,7 @@ export async function meta_youtube_video_v3(video_ids: string[]): Promise<(Youtu
 	let i = 0
 	for (const video_id of video_ids) {
 		const inner = json.items[i]
-		if (!inner || inner.id != video_id) {
+		if (!inner || inner.id !== video_id) {
 			result.push(video_id)
 		} else {
 			// wouldn't happen

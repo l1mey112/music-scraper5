@@ -168,7 +168,7 @@ function FromBox({ ident }: { ident: Ident }) {
 		}
 
 		collaborators_elem = <pre>{collaborators_html.join(', ')}</pre>
-	} else if (kind == 'album_id') {
+	} else if (kind === 'album_id') {
 		const collaborators = album_track_search(ident_id<AlbumId>(ident))
 		const collaborators_html: JSX.Element[] = []
 

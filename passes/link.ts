@@ -101,7 +101,7 @@ function link_classify<T extends keyof any>(url: string, classify_links: Record<
 	for (const [kind, matches] of Object.entries<LinkMatch[]>(classify_links)) {
 		nmatch: for (const match of matches) {
 			// undefined == null
-			if (match.subdomain != url_tld.subdomain) {
+			if (match.subdomain !== url_tld.subdomain) {
 				continue nmatch
 			}
 

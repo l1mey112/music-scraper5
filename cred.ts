@@ -9,17 +9,21 @@ import { fs_root_path } from "./fs"
 
 export type PersistentCredentialKind = keyof PersistentCredentialStore
 type PersistentCredentialStore = {
-	'spotify_user': AccessToken[]
+	'spotify_user': {
+		auth_client_id: string
+		auth_client_secret: string
+		token: AccessToken
+	}
 }
 
-function persistent_cred_get<T extends PersistentCredentialKind>(kind: T): PersistentCredentialStore[T] {
+function persistent_cred_get<T extends PersistentCredentialKind>(kind: T): PersistentCredentialStore[T] | undefined {
 	const cred = db.select({ data: $kv_store.data })
 		.from($kv_store)
 		.where(sql`kind = ${`cred.${kind}`}`)
 		.get() as { data: PersistentCredentialStore[T] } | undefined
 
 	if (!cred) {
-		return []
+		return
 	}
 
 	return cred.data
@@ -33,17 +37,6 @@ function persistent_cred_store<T extends PersistentCredentialKind>(kind: T, data
 			set: { data }
 		})
 		.run()
-}
-
-// must be called inside a pass, throws PassStopException if cred not found
-function pass_persistent_cred_assert<T extends PersistentCredentialKind>(kind: T): PersistentCredentialStore[T] {
-	const datum = persistent_cred_get(kind)
-
-	if (datum.length === 0) {
-		pass_exception(`[cred_get] ${kind} not found`)
-	}
-
-	return datum
 }
 
 // fuckit
@@ -71,34 +64,41 @@ const spotify_config = {
 	fetch: nfetch,
 }
 
-let _spotify_user: [SpotifyApi, UserProfile] | undefined
+type SpotifyContext = { api: SpotifyApi, profile: UserProfile, cred: PersistentCredentialStore['spotify_user'] }
+let _spotify_user: SpotifyContext | undefined
 
 atexit(async () => {	
 	if (_spotify_user) {
-		const token = await _spotify_user[0].getAccessToken()
+		const token = await _spotify_user.api.getAccessToken()
 
 		if (token) {
-			persistent_cred_store('spotify_user', [token])
+			persistent_cred_store('spotify_user', {
+				..._spotify_user.cred,
+				token,
+			})
 		}
 	}
 })
 
-export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
+export async function pass_spotify_user(): Promise<SpotifyContext> {
 	if (_spotify_user) {
 		return _spotify_user
 	}
 
-	const client_redirect_uri = 'http://localhost:8080/callback'
-	const [client_id, client_secret] = spotify_api_cred()
+	const context = persistent_cred_get('spotify_user')
 
-	const [access_token, ] = persistent_cred_get('spotify_user')
-
-	if (access_token) {
-		// TODO: duplicated code
-		const api = SpotifyApi.withAccessToken(client_id, access_token, spotify_config)
-		_spotify_user = [api, await api.currentUser.profile()]
+	if (context) {
+		const api = SpotifyApi.withAccessToken(context.auth_client_id, context.token, spotify_config)
+		_spotify_user = {
+			api,
+			profile: await api.currentUser.profile(),
+			cred: context
+		}
 		return _spotify_user
 	}
+
+	const client_redirect_uri = 'http://localhost:8080/callback'
+	const [client_id, client_secret] = spotify_api_cred.roll()
 
 	async function spotify_auth_user(): Promise<AccessToken> {
 		let the_keys: AccessToken | undefined
@@ -176,18 +176,48 @@ export async function pass_spotify_user(): Promise<[SpotifyApi, UserProfile]> {
 	const api = SpotifyApi.withAccessToken(client_id, token, spotify_config)
 	const profile = await api.currentUser.profile()
 
-	_spotify_user = [api, profile]
+	_spotify_user = {
+		api,
+		profile,
+		cred: {
+			auth_client_id: client_id,
+			auth_client_secret: client_secret,
+			token,
+		}
+	}
 	return _spotify_user
 }
 
-async function make_round_robin<T>(fp: string) {
+async function make_round_robin<T extends string[]>(fp: string) {
 	const json: T[] = await Bun.file(fp).json()
+	const ban_set: Set<object> = new Set()
 
 	let idx = 0
-	return () => {
-		const ret = json[idx]
+	function round_robin() {
+		const nidx = idx
 		idx = (idx + 1) % json.length
-		return ret
+		return nidx
+	}
+
+	return {
+		roll() {
+			// roll, then just ignore ban sets
+			for (let i = 0; i < json.length; i++) {
+				const idx = round_robin()
+				if (!ban_set.has(json[idx])) {
+					return json[idx]
+				}
+			}
+			console.log(`round_robin(${fp}): all banned`, json.length)
+
+			return json[round_robin()]
+		},
+		ban(obj: T) {
+			ban_set.add(obj)
+		},
+		unban(obj: T) {
+			ban_set.delete(obj)
+		}
 	}
 }
 
@@ -196,12 +226,18 @@ const spotify_user_cred = await make_round_robin<[username: string, password: st
 
 // round robin
 export function pass_new_zotify_credentials(): [username: string, password: string] {
-	return spotify_user_cred()
+	return spotify_user_cred.roll()
+}
+
+// pass the original object reference in to ban it
+export function pass_ban_zotify_credentials_for(obj: [username: string, password: string], millis: number) {
+	spotify_user_cred.ban(obj)
+	setTimeout(() => spotify_user_cred.unban(obj), millis)
 }
 
 // round robin
 export function pass_new_spotify_api(): SpotifyApi {
-	const [client_id, client_secret] = spotify_api_cred()
+	const [client_id, client_secret] = spotify_api_cred.roll()
 	const api = SpotifyApi.withClientCredentials(client_id, client_secret, scopes, spotify_config)
 	return api
 }

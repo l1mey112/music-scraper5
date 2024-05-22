@@ -38,7 +38,7 @@ function kv_store(data: IndexData) {
 
 // aux.index_spotify_liked
 export async function pass_aux_index_spotify_liked(entries: QueueEntry<0>[]) {
-	const [api, _] = await pass_spotify_user()
+	const { api } = await pass_spotify_user()
 
 	const ini = await api.currentUser.tracks.savedTracks(1)
 	let total = ini.total

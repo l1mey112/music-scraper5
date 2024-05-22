@@ -24,8 +24,6 @@ export const $track_artist = sqliteTable('track_artist', {
 	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 	artist_id: integer('artist_id').$type<ArtistId>().notNull(),
-
-	// role, etc
 }, (t) => ({
 	idx0: index('track_artist.idx0').on(t.track_id, t.id, t.artist_id),
 	unq: unique('track_artist.unq').on(t.track_id, t.artist_id),
@@ -36,8 +34,6 @@ export const $album_track = sqliteTable('album_track', {
 	id: integer('id').primaryKey({ autoIncrement: true }), // monotonically increasing will preserve sort order
 	album_id: integer('album_id').$type<AlbumId>().notNull(),
 	track_id: integer('track_id').$type<TrackId>().notNull(),
-
-	// role, etc
 }, (t) => ({
 	idx0: index('album_track.idx0').on(t.album_id, t.id, t.track_id),
 	unq: unique('album_track.unq').on(t.album_id, t.track_id),
@@ -165,5 +161,4 @@ export const $source = sqliteTable('source', {
 	duration_s: real('duration_s'), // not accurate to source, but within 7 seconds
 }, (t) => ({
 	idx0: index("source.audio_fingerprint.idx0").on(t.duration_s, t.chromaprint),
-	// pk: index("source.idx").on(t.ident, t.hash, t.track_id),
 }))
