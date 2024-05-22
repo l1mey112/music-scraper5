@@ -8,34 +8,6 @@ import { FSRef, Ident, TrackId } from "../types"
 // drizzle doesn't have a bare `prepare()` api like `get()` and `all()`
 // so we have to use `sqlite.prepare()`
 
-/* // QUERY PLAN
-// |--SEARCH sources USING PRIMARY KEY (hash=?)
-// |--SEARCH t USING COVERING INDEX sources.audio_fingerprint.idx (duration_s>? AND duration_s<?)
-// `--USE TEMP B-TREE FOR ORDER BY
-const match_hash = sqlite.prepare<{ hash: FSRef, score: number }, [FSRef]>(`
-	select t.hash, acoustid_compare2(t.chromaprint, target.chromaprint, 80) as score from
-		sources t,
-		(select hash, chromaprint, duration_s from sources where hash = ?) target
-	where
-		t.track_id not null and t.chromaprint not null and t.hash != target.hash
-		and unlikely(score > 0.75)
-		and t.duration_s between target.duration_s - 7 and target.duration_s + 7
-	order by score desc
-`)
-
-// return a list of scores for a given FSRef matching to all in a track
-
-// QUERY PLAN
-// |--SCAN t USING INDEX sources.idx
-// `--SEARCH sources USING PRIMARY KEY (hash=?)
-const track_hash = sqlite.prepare<{ duration_s: number, score: number }, [FSRef, TrackId]>(`
-	select t.duration_s, acoustid_compare2(t.chromaprint, target.chromaprint, 80) as score from
-		sources t,
-		(select chromaprint from sources where hash = ?) target
-	where
-		track_id = ?
-`) */
-
 const track_isrc = sqlite.prepare<{ track_id1: TrackId, track_id2: TrackId }, []>(`
 	select a.id as track_id1, b.id as track_id2
 	from track a
@@ -47,30 +19,14 @@ const track_isrc = sqlite.prepare<{ track_id1: TrackId, track_id2: TrackId }, []
 // >0.90 is a foolproof match
 // acoustid_compare2 returns null if either of the chromaprints are null, don't bother checking for nulls
 
-// which one is better? i don't know
-// the query plan for the second one looks nicer
-
-/* const track_chromaprint = sqlite.prepare<{ track_id1: TrackId, track_id2: TrackId, score: number }, []>(`
-	select t1.id as track_id1, t2.id as track_id2, acoustid_compare2(t1s.chromaprint, t2s.chromaprint, 80) as score
-	from track t1
-		full outer join track t2 on t1.id < t2.id
-		inner join source t1s on t1.id = t1s.track_id
-		inner join source t2s on t2.id = t2s.track_id
-	where (t1.isrc is null or t2.isrc is null)
-		and unlikely(score > 0.90)
-		and t2s.duration_s between t1s.duration_s - 7 and t1s.duration_s + 7
-	order by score desc
-`) */
-
 const track_chromaprint = sqlite.prepare<{ track_id1: TrackId, track_id2: TrackId, score: number }, []>(`
-	select t1.id as track_id1, t2.id as track_id2, acoustid_compare2(t1s.chromaprint, t2s.chromaprint, 80) as score
-	from source t1s
-		inner join track t1 on t1.id = t1s.track_id
-		inner join source t2s on t2.id = t2s.track_id
-		full outer join track t2 on t1.id < t2.id
-	where --(t1.isrc is null or t2.isrc is null) and 
-		unlikely(score > 0.90)
-		and t2s.duration_s between t1s.duration_s - 7 and t1s.duration_s + 7
+	select s1.track_id as track_id1, s2.track_id as track_id2, 
+		acoustid_compare2(s1.chromaprint, s2.chromaprint, 80)
+		as score
+	from source s1
+	join source s2 on s1.track_id < s2.track_id
+	where unlikely(score > 0.90) and
+		s2.duration_s between s1.duration_s - 7 and s1.duration_s + 7
 `)
 
 // track.merge_using_known_heuristics
