@@ -1,4 +1,4 @@
-preload = ["./sh/ext_compile.ts"]
+preload = ["./sh/makedeps.ts"]
 
 [loader]
 ".html" = "text"

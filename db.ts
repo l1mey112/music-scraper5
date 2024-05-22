@@ -13,7 +13,7 @@ sqlite.exec("pragma synchronous = normal;") // safe with WAL
 sqlite.exec("pragma temp_store = memory;")
 sqlite.exec("pragma mmap_size = 30000000000;")
 //sqlite.exec("pragma auto_vacuum = incremental;") // TODO: needs to be set at db creation before tables, so why call it here?
-sqlite.loadExtension("./chromaprint") // chromaprint.c
+sqlite.loadExtension("./chromaprint/ext")
 
 export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema, logger: false })
 
