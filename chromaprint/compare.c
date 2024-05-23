@@ -160,7 +160,35 @@ uint32_t simhash32(const uint32_t *data, unsigned size) {
 	return hash;
 }
 
+uint64_t simhash64(const uint32_t *data, unsigned size) {
+	if (size == 0) {
+		return 0;
+	}
+
+	int v[64] = {};
+
+	for (unsigned i = 0; i < size; i++) {
+		uint32_t local_hash = data[i];
+		for (size_t j = 0; j < 32; j++) {
+			v[j] += (local_hash & (1 << j)) ? 1 : -1;
+		}
+	}
+
+	uint64_t hash = 0;
+	for (size_t i = 0; i < 64; i++) {
+		if (v[i] > 0) {
+			hash |= (1 << i);
+		}
+	}
+
+	return hash;
+}
+
 // returns number between 0-32, greater than 15 means they are different
-unsigned hdist32(unsigned a, unsigned b) {
+uint32_t hdist32(uint32_t a, uint32_t b) {
+	return popcnt(a ^ b);
+}
+
+uint64_t hdist64(uint64_t a, uint64_t b) {
 	return popcnt(a ^ b);
 }

@@ -74,11 +74,56 @@ static void sqlite3_simhash32(sqlite3_context *ctx, int argc, sqlite3_value **ar
 	sqlite3_result_int(ctx, simhash32(a, size_bytes / 4));
 }
 
+static void sqlite3_simhash64(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+	(void)argc;
+
+	int atype = sqlite3_value_type(argv[0]);
+
+	if (atype == SQLITE_NULL) {
+		sqlite3_result_null(ctx);
+		return;
+	}
+
+	unsigned size_bytes = sqlite3_value_bytes(argv[0]);
+	if ((size_bytes & 3) != 0) {
+		sqlite3_result_error(ctx, "blob parameter must be uint32 array (multiple of 4)", -1);
+		return;
+	}
+
+	const uint32_t *a = (const uint32_t*)sqlite3_value_blob(argv[0]);
+	sqlite3_result_int64(ctx, simhash64(a, size_bytes / 4));
+}
+
 static void sqlite3_hdist32(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
 	(void)argc;
+
+	int atype = sqlite3_value_type(argv[0]);
+	int btype = sqlite3_value_type(argv[1]);
+
+	if (atype == SQLITE_NULL || btype == SQLITE_NULL) {
+		sqlite3_result_null(ctx);
+		return;
+	}
+	
 	unsigned a = sqlite3_value_int(argv[0]);
 	unsigned b = sqlite3_value_int(argv[1]);
 	sqlite3_result_int(ctx, hdist32(a, b));
+}
+
+static void sqlite3_hdist64(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+	(void)argc;
+
+	int atype = sqlite3_value_type(argv[0]);
+	int btype = sqlite3_value_type(argv[1]);
+
+	if (atype == SQLITE_NULL || btype == SQLITE_NULL) {
+		sqlite3_result_null(ctx);
+		return;
+	}
+	
+	uint64_t a = sqlite3_value_int64(argv[0]);
+	uint64_t b = sqlite3_value_int64(argv[1]);
+	sqlite3_result_int64(ctx, hdist64(a, b));
 }
 
 DLL_EXPORT
@@ -87,6 +132,8 @@ int sqlite3_ext_init(sqlite3 *db, char **pz_err_msg, const sqlite3_api_routines 
 	SQLITE_EXTENSION_INIT2(p_api)
 	sqlite3_create_function(db, "acoustid_compare2", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, NULL, sqlite3_acoustid_compare2, NULL, NULL);
 	sqlite3_create_function(db, "simhash32", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, NULL, sqlite3_simhash32, NULL, NULL);
+	sqlite3_create_function(db, "simhash64", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, NULL, sqlite3_simhash64, NULL, NULL);
 	sqlite3_create_function(db, "hdist32", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, NULL, sqlite3_hdist32, NULL, NULL);
+	sqlite3_create_function(db, "hdist64", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, NULL, sqlite3_hdist64, NULL, NULL);
 	return SQLITE_OK;
 }

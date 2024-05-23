@@ -12,4 +12,6 @@ int acoustid_compare2(
 );
 
 uint32_t simhash32(const uint32_t *data, unsigned size);
+uint64_t simhash64(const uint32_t *data, unsigned size);
 unsigned hdist32(unsigned a, unsigned b);
+uint64_t hdist64(uint64_t a, uint64_t b);
