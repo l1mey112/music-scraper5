@@ -2,4 +2,4 @@
 
 import { $ } from 'bun'
 
-await $`make -C chromaprint`
+await $`make -C chromaprint -s`

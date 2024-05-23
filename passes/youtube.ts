@@ -284,7 +284,9 @@ export function pass_aux_index_youtube_playlist(entries: QueueEntry<string>[]) {
 				queue_dispatch_immediate('track.index_youtube_video', video_id)
 			})
 
-			console.log(`added ${amt} videos from playlist ${youtube_id}`)
+			if (amt > 0) {
+				console.log(`added ${amt} videos from playlist ${youtube_id}`)
+			}
 			queue_again_later(entry)
 		})
 	})

@@ -59,7 +59,7 @@ export function snowflake_id(): Snowflake {
 	if (last_timestamp !== now) {
 		sequence = 0
 		last_timestamp = now
-	} else if (sequence == 32) {
+	} else if (sequence === 32) {
 		Bun.sleepSync(1)
 		return snowflake_id()
 	}

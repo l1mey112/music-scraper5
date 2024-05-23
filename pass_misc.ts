@@ -375,7 +375,7 @@ export function link_insert(link: LinkEntry | LinkEntry[]) {
 
 	// sometimes people paste links without https://
 	for (const i of link) {
-		if (i.kind != Link["Unknown URL"]) {
+		if (i.kind !== Link["Unknown URL"]) {
 			continue
 		}
 
@@ -430,7 +430,7 @@ export function link_urls_unknown(ident: Ident, urls: string[]): LinkEntry[] {
 }
 
 export function locale_insert(locales: LocaleEntry | LocaleEntry[]) {
-	if (locales instanceof Array && locales.length == 0) {
+	if (locales instanceof Array && locales.length === 0) {
 		return
 	}
 

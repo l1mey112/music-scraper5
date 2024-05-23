@@ -30,6 +30,6 @@ export function wal_link(ident: Ident) {
 
 function write_log(line: string) {
 	line = line + '\n'
-	assert(fs.writeSync(wal_fd, line) == line.length)
+	assert(fs.writeSync(wal_fd, line) === line.length)
 	fs.fsyncSync(wal_fd)
 }

@@ -48,6 +48,7 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 		let output_s
 		try {
 			output_s = await ytdl.execPromise(args)
+			console.log(`downloaded ${youtube_id}`)
 		} catch (e) {
 			no_log: {
 				if (e instanceof Error) {
@@ -65,7 +66,7 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 			}
 			console.error('failed to download youtube video', youtube_id)
 			console.error(e)
-			queue_retry_failed(entry, `failed to download youtube video ${youtube_id}`)
+			//queue_retry_failed(entry, `failed to download youtube video ${youtube_id}`)
 			return
 		}
 

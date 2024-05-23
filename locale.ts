@@ -22,7 +22,7 @@ export function locale_from_bcp_47(code: string): Locale | undefined {
 }
 
 export function locale_script_equal(to: Locale, foreign: Locale): boolean {
-	if (to == foreign) {
+	if (to === foreign) {
 		return true
 	}
 
@@ -32,7 +32,7 @@ export function locale_script_equal(to: Locale, foreign: Locale): boolean {
 
 	const mapped = map[foreign]
 
-	if (mapped && mapped == to) {
+	if (mapped && mapped === to) {
 		return true
 	}
 
