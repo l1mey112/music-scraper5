@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm"
 import { db } from "../db"
 import { locale_from_bcp_47 } from "../locale"
 import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
-import { image_queue_immutable_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, not_exists, get_ident_or_new, get_ident } from "../pass_misc"
+import { image_queue_immutable_url, link_insert, links_from_text, locale_insert, insert_canonical, run_batched_zip, insert_track_artist, ident_id, link_urls_unknown, assert, run_with_concurrency_limit, not_exists, get_ident_or_new, get_ident, has_preferable_source } from "../pass_misc"
 import { $youtube_channel, $youtube_video } from "../schema"
 import { ArtistId, Ident, ImageKind, Locale, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_playlist, meta_youtube_channel_v3, meta_youtube_video_is_short, meta_youtube_video_status_lemmnos, meta_youtube_video_v3 } from "./youtube_api"
@@ -139,7 +139,12 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 
 			locale_insert(locales)
 			link_insert(links)
-			queue_dispatch_immediate('source.download_from_youtube_video', youtube_id)
+
+			// usually 130kbps on average, but not stable at all
+			// when it isn't stable, we can't rely on exact values
+			if (!has_preferable_source(track_id)) {
+				queue_dispatch_immediate('source.download_from_youtube_video', youtube_id)
+			}
 
 			queue_complete(entry)
 		})

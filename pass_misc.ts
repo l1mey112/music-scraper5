@@ -31,6 +31,17 @@ function id_exists(id: TrackId | AlbumId | ArtistId) {
 	return id_exists_stmt.get(id)?.found === 1
 }
 
+const has_preferable_source_stmt = sqlite.prepare<{ found: 1 }, [TrackId, bitrate: number]>(`
+	select 1 as found
+	from source
+	where track_id = ?1 and bitrate >= ?2
+	limit 1;
+`)
+
+export function has_preferable_source(track_id: TrackId, bitrate: number = 0) {
+	return has_preferable_source_stmt.get(track_id, bitrate)?.found === 1
+}
+
 function object_has_any(data: any): boolean {
 	if (typeof data !== 'object') {
 		return false

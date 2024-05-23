@@ -52,7 +52,6 @@ export const $youtube_video = sqliteTable('youtube_video', {
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 
 	channel_id: text('channel_id').notNull(),
-	source: text('source').$type<FSRef>(), // downloaded video source
 })
 
 // WITHOUT-ROWID: youtube_channel
@@ -69,7 +68,6 @@ export const $spotify_track = sqliteTable('spotify_track', {
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 
 	preview_url: text('preview_url'),
-	source: text('source').$type<FSRef>(), // downloaded audio source
 })
 
 // WITHOUT-ROWID: spotify_artist
@@ -160,5 +158,6 @@ export const $source = sqliteTable('source', {
 	chromaprint: blob('chromaprint').$type<Uint8Array>(),
 	duration_s: real('duration_s'), // not accurate to source, but within 7 seconds
 }, (t) => ({
-	idx0: index("source.audio_fingerprint.idx0").on(t.duration_s, t.chromaprint),
+	idx0: index("source.audio_fingerprint_idx").on(t.duration_s, t.chromaprint, t.hash),
+	idx1: index("source.search_bitrate_idx").on(t.track_id, t.bitrate),
 }))

@@ -1,7 +1,7 @@
 import { db } from "../db"
 import { AlbumId, ArtistId, ImageKind, LocaleDesc, LocaleEntry, QueueEntry, TrackId } from "../types"
 import { $spotify_album, $spotify_artist, $spotify_track } from "../schema"
-import { get_ident, get_ident_or_new, not_exists, image_queue_immutable_url, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip } from "../pass_misc"
+import { get_ident, get_ident_or_new, not_exists, image_queue_immutable_url, insert_album_track, insert_canonical, insert_track_artist, locale_insert, run_batched_zip, has_preferable_source } from "../pass_misc"
 import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { sql } from "drizzle-orm"
 import { pass_new_spotify_api } from "../cred"
@@ -77,7 +77,11 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 			}
 
 			insert_canonical($spotify_track, track.id, spotify_id, data)
-			queue_dispatch_immediate('source.download_from_spotify_track', spotify_id)
+
+			// 160kbps on spotify is the highest quality for free users
+			if (!has_preferable_source(track_id, 160)) {
+				queue_dispatch_immediate('source.download_from_spotify_track', spotify_id)
+			}
 			queue_complete(entry)
 		})
 	})

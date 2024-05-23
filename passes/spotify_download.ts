@@ -12,7 +12,7 @@ import { pass_ban_zotify_credentials_for, pass_new_zotify_credentials } from "..
 const can_download_source = sqlite.prepare<number, [string]>(`
 	select 1
 	from spotify_track
-	where id = ? and source is null and preview_url is not null
+	where id = ? and preview_url is not null
 `)
 
 // source.download_from_spotify_track
@@ -106,11 +106,6 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 						track_id,
 						bitrate: 160, // 160kbps
 					})
-					.run()
-
-				db.update($spotify_track)
-					.set({ source: hash })
-					.where(sql`id = ${spotify_id}`)
 					.run()
 
 				queue_dispatch_immediate('source.classify_chromaprint', hash)
