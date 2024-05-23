@@ -52,7 +52,9 @@ export const $youtube_video = sqliteTable('youtube_video', {
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 
 	channel_id: text('channel_id').notNull(),
-})
+}, (t) => ({
+	idx0: index('youtube_video.idx0').on(t.track_id),
+}))
 
 // WITHOUT-ROWID: youtube_channel
 export const $youtube_channel = sqliteTable('youtube_channel', {
@@ -68,7 +70,9 @@ export const $spotify_track = sqliteTable('spotify_track', {
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 
 	preview_url: text('preview_url'),
-})
+}, (t) => ({
+	idx0: index('spotify_track.idx0').on(t.track_id),
+}))
 
 // WITHOUT-ROWID: spotify_artist
 export const $spotify_album = sqliteTable('spotify_album', {

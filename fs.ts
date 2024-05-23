@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync } from "fs"
+import { existsSync, mkdirSync, statSync, unlinkSync } from "fs"
 import { realpathSync } from "fs"
 import { FSRef } from "./types"
 import { BunFile } from "bun"
@@ -27,6 +27,24 @@ export function fs_root_path(path: string): string {
 
 export function fs_hash_path(hash: FSRef): string {
 	return `${fs_media}/${shard_part(hash)}/${hash}`
+}
+
+// return if exists and has at least one byte
+export function fs_hash_exists_some(hash: FSRef): boolean {
+	if (!existsSync(fs_hash_path(hash))) {
+		return false
+	}
+
+	const stat = statSync(fs_hash_path(hash))
+	return stat.size > 0
+}
+
+export function fs_hash_delete(hash: FSRef) {
+	if (!fs_hash_exists_some(hash)) {
+		return
+	}
+
+	unlinkSync(fs_hash_path(hash))
 }
 
 export function fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {

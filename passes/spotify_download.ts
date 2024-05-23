@@ -1,9 +1,8 @@
-import { $, ShellError } from "bun"
-import { fs_media, fs_sharded_path_noext_nonlazy } from "../fs"
+import { $ } from "bun"
+import { fs_hash_delete, fs_hash_exists_some, fs_media, fs_sharded_path_noext_nonlazy } from "../fs"
 import { FSRef, QueueEntry } from "../types"
 import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
-import { sql } from "drizzle-orm"
 import { get_ident, run_with_concurrency_limit } from "../pass_misc"
 import { queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { pass_ban_zotify_credentials_for, pass_new_zotify_credentials } from "../cred"
@@ -98,6 +97,12 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 			console.log('downloaded', spotify_id)
 
 			const hash = (hash_part + '.ogg') as FSRef
+
+			if (!fs_hash_exists_some(hash)) {
+				fs_hash_delete(hash)
+				console.error('downloaded file does not exist ????', hash)
+				break fail
+			}
 
 			db.transaction(db => {
 				db.insert($source)
