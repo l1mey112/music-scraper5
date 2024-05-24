@@ -6,7 +6,7 @@ import { AlbumEntry, AlbumId, ArtistEntry, ArtistId, Ident, ImageKind, Link, Lin
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { rowId } from "drizzle-orm/sqlite-core/expressions"
 import { queue_dispatch_immediate } from "./pass"
-import { wal_link } from "./wal"
+import { wal_link, wal_log } from "./wal"
 
 export function not_exists<T>(table: SQLiteTable, cond: SQL) {
 	return db.select({ _: sql`1` })
@@ -27,8 +27,33 @@ const id_exists_stmt = sqlite.prepare<{ found: 0 | 1 }, [TrackId | AlbumId | Art
 	limit 1;
 `)
 
-function id_exists(id: TrackId | AlbumId | ArtistId) {
+export function id_exists(id: TrackId | AlbumId | ArtistId) {
 	return id_exists_stmt.get(id)?.found === 1
+}
+
+const id_exists_track_stmt = sqlite.prepare<{ found: 1 }, [TrackId]>(`
+	select 1 as found from track where id = ?1 limit 1;
+`)
+
+const id_exists_album_stmt = sqlite.prepare<{ found: 1 }, [AlbumId]>(`
+	select 1 as found from album where id = ?1 limit 1;
+`)
+
+const id_exists_artist_stmt = sqlite.prepare<{ found: 1 }, [ArtistId]>(`
+	select 1 as found from artist where id = ?1 limit 1;
+`)
+
+export function id_exists_in<T extends ArticleKind>(kind: T, id: KindToId[T]): boolean {
+	switch (kind) {
+		case 'track_id':
+			return id_exists_track_stmt.get(id as TrackId)?.found === 1
+		case 'album_id':
+			return id_exists_album_stmt.get(id as AlbumId)?.found === 1
+		case 'artist_id':
+			return id_exists_artist_stmt.get(id as ArtistId)?.found === 1
+		default:
+			assert(false)
+	}
 }
 
 const has_preferable_source_stmt = sqlite.prepare<{ found: 1 }, [TrackId, bitrate: number]>(`
@@ -197,6 +222,22 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 	// id1 <- id2
 	// merge into oldest
 
+	let okay = true
+
+	if (!id_exists_in(kind, id1)) {
+		wal_log(`merge: id1 does not exist (id1: ${id1}, id2: ${id2})`)
+		okay = false
+	}
+
+	if (!id_exists_in(kind, id2)) {
+		wal_log(`merge: id2 does not exist (id1: ${id1}, id2: ${id2})`)
+		okay = false
+	}
+
+	if (!okay) {
+		return
+	}
+
 	if (id1 > id2) {
 		let tmp = id1
 		id1 = id2
@@ -249,6 +290,9 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 
 	// merge id2 into id1
 	db.transaction(db => {
+		console.log(ident_link_command(ident1))
+		console.log(ident_link_command(ident2))
+
 		if (kind === 'artist_id') {
 			// merge two artist ids together, preserving the order placing the resultant artist id FIRST
 
@@ -355,21 +399,17 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 			.run()
 
 		if (object_has_any(merged_obj)) {
-			// upsert
-			db.insert(primary)
-				.values({ ...merged_obj, id: id1 })
-				.onConflictDoUpdate({
-					target: sql`${primary}."id"`,
-					set: merged_obj,
-				})
-				.run()
-		} else {
-			db.insert(primary)
-				.values({ id: id1 })
-				.onConflictDoNothing()
+			db.update(primary)
+				.set(merged_obj)
+				.where(sql`id = ${id1}`)
 				.run()
 		}
 
+		// nothing literally 
+		assert(!ident_link_command(ident1).endsWith('.'))
+
+		console.log(ident_link_command(ident1))
+		process.exit(1)
 		// log the merge
 		wal_link(ident1)
 	})

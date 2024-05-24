@@ -1,9 +1,8 @@
 import * as YTDlpWrap from "yt-dlp-wrap"
-import { db, sqlite } from "../db"
+import { db } from "../db"
 import { fs_hash_delete, fs_hash_exists_some, fs_sharded_path_noext_nonlazy } from "../fs"
 import { FSRef, QueueEntry } from "../types"
 import { $source, $youtube_video } from "../schema"
-import { sql } from "drizzle-orm"
 import { get_ident, run_with_concurrency_limit } from "../pass_misc"
 import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 

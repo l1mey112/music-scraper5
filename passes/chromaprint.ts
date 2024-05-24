@@ -6,7 +6,6 @@ import { $source } from "../schema"
 import { sql } from "drizzle-orm"
 import { assert, run_with_concurrency_limit } from "../pass_misc"
 import { queue_complete } from "../pass"
-import { wal_log, wal_pass_fatal } from "../wal"
 
 // source.classify_chromaprint
 export function pass_source_classify_chromaprint(entries: QueueEntry<FSRef>[]) {
@@ -28,20 +27,6 @@ export function pass_source_classify_chromaprint(entries: QueueEntry<FSRef>[]) {
 				queue_complete(entry) // don't retry
 				return
 			}
-
-			// won't need again, unless everything breaks
-			/* if (!await Bun.file(path).exists()) {
-				// oh my god, delete this and everything about it
-
-				db.transaction(db => {
-					db.delete($source)
-						.where(sql`hash = ${hash}`)
-						.run()
-					queue_complete(entry)
-					wal_log(`hash ${hash} does not exist, deleting`, entry)
-				})
-				return
-			} */
 
 			// this shouldn't fail
 			assert(false, `fpcalc failed(${entry.payload}): ${fpcalc.stderr}`)
