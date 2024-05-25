@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import { sqlite } from "../db";
-import { queue_dispatch_immediate } from "../pass";
+import { sqlite } from "../db"
+import { queue_dispatch_immediate } from "../pass"
 
 // select all tracks with no source, returning the (youtube_id?, spotify_id?, ...)
 const stmt = sqlite.prepare<{ track_id: string, youtube_id?: string | null, spotify_id?: string | null }, []>(`

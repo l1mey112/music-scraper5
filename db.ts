@@ -15,9 +15,9 @@ sqlite.exec("pragma mmap_size = 30000000000;")
 //sqlite.exec("pragma auto_vacuum = incremental;") // TODO: needs to be set at db creation before tables, so why call it here?
 sqlite.loadExtension("./chromaprint/ext")
 
-export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema, logger: true })
+export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema, logger: false })
 
-function db_close() {
+export function db_close() {
 	if (sqlite.inTransaction) {
 		sqlite.exec("rollback")
 		console.log('db: rolled back')

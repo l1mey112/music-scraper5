@@ -39,13 +39,6 @@ export const $album_track = sqliteTable('album_track', {
 	unq: unique('album_track.unq').on(t.album_id, t.track_id),
 }))
 
-// persistent store
-// WITHOUT-ROWID: kv_store
-export const $kv_store = sqliteTable('kv_store', {
-	kind: text('kind').primaryKey(),
-	data: text('data', { mode: 'json' }).notNull(),
-})
-
 // WITHOUT-ROWID: youtube_video
 export const $youtube_video = sqliteTable('youtube_video', {
 	id: text('id').primaryKey(),
@@ -165,3 +158,16 @@ export const $source = sqliteTable('source', {
 	idx0: index("source.audio_fingerprint_idx").on(t.duration_s, t.chromaprint, t.hash),
 	idx1: index("source.search_bitrate_idx").on(t.track_id, t.bitrate),
 }))
+
+// persistent store
+// WITHOUT-ROWID: kv_store
+export const $kv_store = sqliteTable('kv_store', {
+	kind: text('kind').primaryKey(),
+	data: text('data', { mode: 'json' }).notNull(),
+})
+
+export const $cred_spotify_user = sqliteTable('cred_spotify_user', {
+	username: text('username').notNull(),
+	password: text('password').notNull(),
+	expiry: integer('expiry').default(0).notNull(),
+})

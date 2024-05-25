@@ -1,11 +1,12 @@
-import { sql } from "drizzle-orm"
-import { db } from "./db"
-import { $kv_store } from "./schema"
+import { InferSelectModel, getTableName, sql } from "drizzle-orm"
+import { db, sqlite } from "./db"
+import { $cred_spotify_user, $kv_store } from "./schema"
 import { pass_exception } from "./pass"
 import { AccessToken, SpotifyApi, UserProfile } from "@spotify/web-api-ts-sdk"
 import { nfetch } from "./fetch"
 import { atexit } from "./atexit"
 import { fs_root_path } from "./fs"
+import { SQLiteTable } from "drizzle-orm/sqlite-core"
 
 export type PersistentCredentialKind = keyof PersistentCredentialStore
 type PersistentCredentialStore = {
@@ -208,7 +209,7 @@ async function make_round_robin<T extends string[]>(fp: string) {
 					return json[idx]
 				}
 			}
-			console.log(`round_robin(${fp}): all banned`, json.length)
+			console.log(`round_robin(${fp}): all ${json.length} banned`)
 
 			return json[round_robin()]
 		},
@@ -221,19 +222,57 @@ async function make_round_robin<T extends string[]>(fp: string) {
 	}
 }
 
-const spotify_api_cred = await make_round_robin<[client_id: string, client_secret: string]>(fs_root_path('spotify_api_cred_list.json'))
-const spotify_user_cred = await make_round_robin<[username: string, password: string]>(fs_root_path('spotify_user_cred_list.json'))
+function make_round_robin_sqlite<T extends SQLiteTable>(table: T) {
+	const table_name = getTableName(table)
 
-// round robin
-export function pass_new_zotify_credentials(): [username: string, password: string] {
-	return spotify_user_cred.roll()
+	type Entry = InferSelectModel<T> & { rowid: number }
+
+	let i = 0
+	const stmt_select = sqlite.prepare<Entry, [i: number]>(`
+		select *, rowid from "${table_name}"
+		order by expiry asc
+		limit 1 offset ?
+	`)
+
+	const stmt_delete = sqlite.prepare<[], [rowid: number]>(`
+		delete from "${table_name}" where rowid = ?
+	`)
+
+	const stmt_update = sqlite.prepare<[], [expiry: number, rowid: number]>(`
+		update "${table_name}" set expiry = ? where rowid = ?
+	`)
+
+	return {
+		roll(): Entry {
+			const item = stmt_select.get(i++)
+
+			if (!item) {
+				i = 0
+				return stmt_select.get(i++)! // let them deal with the null exception
+			}
+
+			return item
+		},
+		ban(entry: Entry, duration: number) {
+			stmt_update.run(Date.now() + duration, entry.rowid)
+		},
+		kill(entry: Entry) {
+			stmt_delete.run(entry.rowid)
+		},
+	}
 }
 
-// pass the original object reference in to ban it
-export function pass_ban_zotify_credentials_for(obj: [username: string, password: string], millis: number) {
-	spotify_user_cred.ban(obj)
-	setTimeout(() => spotify_user_cred.unban(obj), millis)
+async function make_random<T extends string[]>(fp: string) {
+	const json: T[] = await Bun.file(fp).json()
+	return {
+		roll() {
+			return json[Math.floor(Math.random() * json.length)]
+		}
+	}
 }
+
+const spotify_api_cred = await make_random<[client_id: string, client_secret: string]>(fs_root_path('spotify_api_cred_list.json'))
+export const spotify_user_cred = make_round_robin_sqlite($cred_spotify_user)
 
 // round robin
 export function pass_new_spotify_api(): SpotifyApi {

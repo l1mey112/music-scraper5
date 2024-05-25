@@ -140,8 +140,29 @@ function test_sources() {
 	}
 }
 
+function test_images() {
+	const images = db.select()
+		.from($image)
+		.all()
+
+	let idx = 0
+	for (const image of images) {
+		const path = fs_hash_path(image.hash)
+		if (!fs.existsSync(fs_hash_path(image.hash))) {
+			if (!do_purge) {
+				console.log(`missing image(${++idx}/${images.length}) ${image.hash} (path: ${path})`)
+			} else {
+				db.delete($image)
+					.where(sql`hash = ${image.hash}`)
+					.run()
+			}
+		}
+	}
+}
+
 test('track_id')
 test('album_id')
 test('artist_id')
 test_ident()
 test_sources()
+test_images()

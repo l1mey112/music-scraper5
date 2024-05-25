@@ -3,7 +3,7 @@ import { db } from "../db"
 import { fs_hash_delete, fs_hash_exists_some, fs_sharded_path_noext_nonlazy } from "../fs"
 import { FSRef, QueueEntry } from "../types"
 import { $source, $youtube_video } from "../schema"
-import { get_ident, run_with_concurrency_limit } from "../pass_misc"
+import { get_ident, has_preferable_source, run_with_concurrency_limit } from "../pass_misc"
 import { queue_again_later, queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 
 // source.download_from_youtube_video
@@ -13,6 +13,14 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 	return run_with_concurrency_limit(entries, 20, async (entry) => {
 		const youtube_id = entry.payload
 		const [_, track_id] = get_ident(youtube_id, $youtube_video, 'track_id')
+
+		// usually 130kbps on average, but not stable at all
+		// when it isn't stable, we can't rely on exact values
+		if (has_preferable_source(track_id)) {
+			console.log('skipping youtube video download, already have a source')
+			queue_complete(entry)
+			return
+		}
 
 		const [path, hash_part] = fs_sharded_path_noext_nonlazy()
 

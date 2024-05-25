@@ -3,9 +3,9 @@ import { fs_hash_delete, fs_hash_exists_some, fs_media, fs_sharded_path_noext_no
 import { FSRef, QueueEntry } from "../types"
 import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
-import { get_ident, run_with_concurrency_limit } from "../pass_misc"
+import { get_ident, has_preferable_source, run_with_concurrency_limit } from "../pass_misc"
 import { queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
-import { pass_ban_zotify_credentials_for, pass_new_zotify_credentials } from "../cred"
+import { spotify_user_cred } from "../cred"
 
 // if contains no preview, then it's not available
 const can_download_source = sqlite.prepare<number, [string]>(`
@@ -16,11 +16,19 @@ const can_download_source = sqlite.prepare<number, [string]>(`
 
 // source.download_from_spotify_track
 export function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
-	return run_with_concurrency_limit(entries, 16, async (entry) => {
+	return run_with_concurrency_limit(entries, 20, async (entry) => {
 		const spotify_id = entry.payload
 		const [_, track_id] = get_ident(spotify_id, $spotify_track, 'track_id')
 
+		// 160kbps on spotify is the highest quality for free users
+		if (has_preferable_source(track_id, 160)) {
+			console.log('skipping spotify track download, already have a source')
+			queue_complete(entry)
+			return
+		}
+
 		if (!can_download_source.get(spotify_id)) {
+			queue_complete(entry)
 			return
 		}
 
@@ -32,15 +40,15 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 		// path: xx/??
 		const file = path.slice(fs_media.length + 1)
 
-		const cred = pass_new_zotify_credentials()
-		const [username, password] = cred
+		const cred = spotify_user_cred.roll()
+		const { username, password } = cred
 
 		// INFO: you know, from what i can tell, it isn't spotify throttling us. they're absolutely oblivious.
 		//       no harm to the people at zotify, but it is zotify itself which is shitting the bed.
 
 		fail: {
 			// 160kbps (highest for free users)
-			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --root-path ${fs_media} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
+			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --save-credentials False --root-path ${fs_media} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
 				.quiet()
 				.nothrow()
 
@@ -54,27 +62,30 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 			// error is regular occurance
 			if (sh.stderr.includes('OSError: [Errno 9] Bad file descriptor') || sh.stderr.includes('Failed reading packet!')) {
 				console.error('bad file descriptor for', spotify_id)
-				break fail // try again next go
+				break fail
 			}
 			if (sh.stderr.includes('GENERAL DOWNLOAD ERROR') || sh.stdout.includes('GENERAL DOWNLOAD ERROR')) {
 				console.error('general download error for', spotify_id)
-				break fail // try again next go
+				break fail
 			}
 			if (sh.stdout.includes('SKIPPING SONG - FAILED TO QUERY METADATA') || sh.stderr.includes('SKIPPING SONG - FAILED TO QUERY METADATA')) {
 				console.error('failed to query metadata for', spotify_id)
-				break fail // try again next go
+				break fail
 			}
-			if (sh.stderr.includes('OSError') || sh.stdout.includes('OSError')) {
+			if (sh.stderr.includes('OSError') || sh.stdout.includes('OSError')
+				|| sh.stderr.includes('Remote end closed connection without response') || sh.stdout.includes('Remote end closed connection without response')
+				|| sh.stderr.includes('Connection reset by peer') || sh.stdout.includes('Connection reset by peer')) {
 				console.error('os error for', spotify_id)
-				break fail // try again next go
-			}
-			if (sh.stderr.includes('Remote end closed connection without response') || sh.stdout.includes('Remote end closed connection without response')) {
-				console.error('remote end closed connection without response for', spotify_id)
-				break fail // try again next go
+				break fail
 			}
 			if (sh.stderr.includes('Audio key error') || sh.stdout.includes('Audio key error')) {
 				console.error('audio key error for', spotify_id)
-				break fail // try again next go
+				break fail
+			}
+			if (sh.stderr.includes('BadCredentials') || sh.stdout.includes('BadCredentials')) {
+				console.error('bad credentials for', username, password)
+				spotify_user_cred.kill(cred)
+				return
 			}
 
 			// python catches SIGINT for us (non-propagation) and returns 130
@@ -91,7 +102,7 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 				console.error('failed to download track', spotify_id, 'exit code', sh.exitCode)
 				console.error(sh.stdout.toString())
 				console.error(sh.stderr.toString())
-				break fail // try again next go
+				break fail
 			}
 
 			console.log('downloaded', spotify_id)
@@ -118,8 +129,6 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 			})
 			return
 		}
-
-		// hold up this current credential from being used again
-		pass_ban_zotify_credentials_for(cred, 10_000)
+		spotify_user_cred.ban(cred, 10_000)
 	})
 }

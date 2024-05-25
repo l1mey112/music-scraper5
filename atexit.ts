@@ -8,7 +8,7 @@ let exiting = false
 const atexits: (() => MaybePromise<void>)[] = []
 const atexits_last: (() => MaybePromise<void>)[] = []
 
-export function _manual_cleanup(signal?: string) {
+export function _manual_cleanup() {
 	if (exiting) {
 		return
 	}
@@ -17,22 +17,23 @@ export function _manual_cleanup(signal?: string) {
 
 	Promise.all(atexits.map(cb => cb())).finally(() => {
 		Promise.all(atexits_last.map(cb => cb())).finally(() => {
-			if (signal) {
-				process.exit(1)
-			}
+			process.exit()
 		})
 	})
 }
 
-const sigs = ['SIGINT', 'SIGUSR1', 'SIGUSR2', 'SIGTERM'] as const
+const sigs = ['SIGINT', 'SIGUSR1', 'SIGUSR2', 'SIGTERM', 'uncaughtException', 'unhandledRejection'] as const
 
 sigs.forEach(sig => {
-	process.on(sig, () => _manual_cleanup(sig))
+	process.on(sig, () => {
+		process.exitCode = 1
+		_manual_cleanup()
+	})
 })
 
 process.on('beforeExit', _manual_cleanup)
-process.on('uncaughtException', _manual_cleanup)
-process.on('unhandledRejection', _manual_cleanup)
+
+// this does not play well at all with `process.exit()`, don't use it if you want anything here ran.
 
 export function atexit(cb: () => void) {
 	atexits.push(cb)

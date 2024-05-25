@@ -39,7 +39,6 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 	// they lied here, it's 50
 
 	return run_batched_zip(entries, 50, batch_fn, (entry, track) => {
-		const api = pass_new_spotify_api()
 		// null (track doesn't exist), retry again later
 		if (!track) {
 			queue_retry_failed(entry, `track not found (${entry.payload})`)
@@ -78,10 +77,7 @@ export async function pass_track_index_spotify_track(entries: QueueEntry<string>
 
 			insert_canonical($spotify_track, track.id, spotify_id, data)
 
-			// 160kbps on spotify is the highest quality for free users
-			if (!has_preferable_source(track_id, 160)) {
-				queue_dispatch_immediate('source.download_from_spotify_track', spotify_id)
-			}
+			queue_dispatch_immediate('source.download_from_spotify_track', spotify_id)
 			queue_complete(entry)
 		})
 	})

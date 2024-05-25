@@ -1,6 +1,5 @@
 import { pass_source_classify_chromaprint } from "./passes/chromaprint"
 import { pass_image_download_image_url } from "./passes/image"
-import { pass_link_classify_link_shorteners, pass_link_classify_weak } from "./passes/link"
 import { pass_track_merge_using_known_heuristics } from "./passes/merge_track"
 import { pass_album_index_spotify_album, pass_artist_index_spotify_artist, pass_aux_assign_album_spotify_track, pass_aux_assign_track_spotify_artist, pass_track_index_spotify_track } from "./passes/spotify"
 import { pass_source_download_from_spotify_track } from "./passes/spotify_download"
@@ -8,7 +7,7 @@ import { pass_aux_index_spotify_liked } from "./passes/spotify_liked"
 import { pass_aux_spotify_artist0 } from "./passes/spotify_raw"
 import { pass_aux_assign_track_youtube_channel, pass_aux_youtube_channel0, pass_artist_index_youtube_channel, pass_track_index_youtube_video, pass_aux_index_youtube_playlist } from "./passes/youtube"
 import { pass_source_download_from_youtube_video } from "./passes/youtube_download"
-import { KV, MaybePromise, QueueEntry, static_assert, type_extends } from "./types"
+import { MaybePromise, QueueEntry, is_never, static_assert, type_extends } from "./types"
 
 export const pass_article_kinds = ['aux', 'track', 'album', 'artist', 'image', 'source', 'link'] as const
 
@@ -39,8 +38,11 @@ type PassIdentifierList = [
 	'aux.index_spotify_liked',
 ]
 
+// PassIdentifierPayload<PassIdentifier> should equal unknown
 export type PassIdentifierPayload<T extends PassIdentifier> =
-	(typeof passes_const)[T]['pass'] extends PassCallback<infer U> ? U : never
+	(typeof passes_const)[T]['pass'] extends PassCallback<infer U>
+		? (is_never<U> extends true ? unknown : U)
+		: never
 
 type _ = static_assert<type_extends<PassIdentifierList, PassIdentifierTemplate[]>>
 

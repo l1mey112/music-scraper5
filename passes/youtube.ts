@@ -138,13 +138,8 @@ export function pass_track_index_youtube_video(entries: QueueEntry<string>[]) {
 			}
 
 			locale_insert(locales)
-			link_insert(links)
-
-			// usually 130kbps on average, but not stable at all
-			// when it isn't stable, we can't rely on exact values
-			if (!has_preferable_source(track_id)) {
-				queue_dispatch_immediate('source.download_from_youtube_video', youtube_id)
-			}
+			link_insert(links)			
+			queue_dispatch_immediate('source.download_from_youtube_video', youtube_id)
 
 			queue_complete(entry)
 		})

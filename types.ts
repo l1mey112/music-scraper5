@@ -10,6 +10,7 @@ export type KV<K extends keyof any, V> = Partial<Record<K, V>>
 
 export type static_assert<T extends true> = never
 export type type_extends<T, U> = T extends U ? true : false
+export type is_never<T> = [T] extends [never] ? true : false;
 
 type Entries<T> = {
 	[K in keyof T]: [K, T[K]]

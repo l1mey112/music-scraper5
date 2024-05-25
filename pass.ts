@@ -108,7 +108,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 	let changed
 	let trip_count = 0
 
-	function try_catch(e: any): PassError {
+	function try_catch(e: any, pass: string): PassError {
 		let error = 'exception thrown'
 		let throwable = e
 		if (e instanceof PassStopException) {
@@ -117,7 +117,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 		}
 		return {
 			kind: 'error',
-			pass: pass.name,
+			pass,
 			throwable,
 			error,
 		}
@@ -163,9 +163,9 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 					try {
 						await fn(converted)
 					} catch (e) {
-						yield try_catch(e)
+						yield try_catch(e, name)
 						return
-					}	
+					}
 					yield {
 						kind: 'after',
 						pass: name,
@@ -186,7 +186,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 				try {
 					await fn()
 				} catch (e) {
-					yield try_catch(e)
+					yield try_catch(e, name)
 					return
 				}	
 				yield {

@@ -217,6 +217,9 @@ export function ident_link_command(ident: Ident): string {
 }
 
 export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: KindToId[T]) {
+	console.log('not performing merge', kind, id1, id2)
+	return
+
 	assert(kind !== 'album_id') // not implemented yet
 
 	// id1 <- id2
@@ -290,9 +293,6 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 
 	// merge id2 into id1
 	db.transaction(db => {
-		console.log(ident_link_command(ident1))
-		console.log(ident_link_command(ident2))
-
 		if (kind === 'artist_id') {
 			// merge two artist ids together, preserving the order placing the resultant artist id FIRST
 
@@ -333,6 +333,7 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 					}
 				}
 
+				assert(mapping_ids.length <= 1)
 				for (const attribute_map of mapping_ids) {
 					db.delete($track_artist)
 						.where(sql`id = ${attribute_map}`)
@@ -405,11 +406,8 @@ export function merge<T extends ArticleKind>(kind: T, id1: KindToId[T], id2: Kin
 				.run()
 		}
 
-		// nothing literally 
 		assert(!ident_link_command(ident1).endsWith('.'))
 
-		console.log(ident_link_command(ident1))
-		process.exit(1)
 		// log the merge
 		wal_link(ident1)
 	})

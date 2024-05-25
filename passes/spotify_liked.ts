@@ -9,33 +9,6 @@ import { queue_again_later, queue_dispatch_immediate } from "../pass"
 //       for an unbiased API search/index, use the client credentials flow/not the saved tracks API.
 //       this will require double request/overhead
 
-/* type IndexData = {
-	[user_id: string]: number
-}
-
-function kv_get(): IndexData {
-	const kv = db.select({ data: $kv_store.data })
-		.from($kv_store)
-		.where(sql`kind = 'spotify_index_liked'`)
-		.get() as { data: IndexData } | undefined
-
-	if (!kv) {
-		return {}
-	}
-
-	return kv.data
-}
-
-function kv_store(data: IndexData) {
-	db.insert($kv_store)
-		.values({ kind: 'spotify_index_liked', data })
-		.onConflictDoUpdate({
-			target: [$kv_store.kind],
-			set: { data },
-		})
-		.run()
-} */
-
 // aux.index_spotify_liked
 export async function pass_aux_index_spotify_liked(entries: QueueEntry<0>[]) {
 	const { api } = await pass_spotify_user()

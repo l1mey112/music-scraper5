@@ -1,10 +1,10 @@
 import { sql } from 'drizzle-orm'
 import { db } from '../db'
 import { nfetch } from '../fetch'
-import { fs_hash_path, fs_sharded_lazy_bunfile } from '../fs'
+import { fs_hash_delete, fs_hash_exists_some, fs_hash_path, fs_sharded_lazy_bunfile } from '../fs'
 import { mime_ext } from '../mime'
-import { queue_complete, queue_retry_failed } from '../pass'
-import { get_ident, run_with_concurrency_limit } from '../pass_misc'
+import { queue_complete } from '../pass'
+import { run_with_concurrency_limit } from '../pass_misc'
 import { $image } from '../schema'
 import { Ident, ImageKind, QueueEntry } from '../types'
 import sizeOf from 'image-size'
@@ -36,23 +36,29 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 		}
 
 		const ext = mime_ext(resp.headers.get("content-type"))
-		const [file, new_hash] = fs_sharded_lazy_bunfile(ext)
+		const [file, hash] = fs_sharded_lazy_bunfile(ext)
 		
 		await Bun.write(file, resp)
 
+		if (!fs_hash_exists_some(hash)) {
+			fs_hash_delete(hash)
+			console.error('downloaded file does not exist ????', hash)
+			return
+		}
+
 		db.transaction(db => {
-			const size = sizeOf(fs_hash_path(new_hash))
+			const size = sizeOf(fs_hash_path(hash))
 
 			if (!size.width || !size.height) {
 				// so damn rare, malformed image??
 				// this will leave the image in the media folder, should probably delete
-				wal_log(`sizeOf returned no width or height for ${new_hash}`, entry)
+				wal_log(`sizeOf returned no width or height for ${hash}`, entry)
 				queue_complete(entry)
 				return
 			}
 
 			db.insert($image)
-				.values({ hash: new_hash, ident, kind: image_kind, width: size.width, height: size.height, preferred })
+				.values({ hash: hash, ident, kind: image_kind, width: size.width, height: size.height, preferred })
 				.run()
 
 			queue_complete(entry)
