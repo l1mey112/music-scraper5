@@ -53,6 +53,7 @@ type PassError = {
 type PassBefore = {
 	kind: 'before'
 	pass: string
+	entries?: number
 }
 
 type PassAfter = {
@@ -158,6 +159,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 					yield {
 						kind: 'before',
 						pass: name,
+						entries: k.length,
 					}
 					const now = performance.now()
 					try {

@@ -15,7 +15,11 @@ try {
 		for await (const status of pass()) {
 			switch (status.kind) {
 				case 'before': {
-					process.stdout.write(`\r${status.pass}...`)
+					let msg = `\r${status.pass}...`
+					if (status.entries) {
+						msg += ` (${status.entries} items)`
+					}
+					process.stdout.write(msg)
 					break
 				}
 				case 'after': {
