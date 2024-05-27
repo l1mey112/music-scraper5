@@ -4,22 +4,34 @@ import { sql } from "drizzle-orm"
 import { db } from "../db"
 import { pass_hash, queue_known_pass } from "../pass"
 import { $queue } from "../schema"
+import { PassIdentifier, passes } from "../passes"
 
-const cmd = process.argv[2]
+function pass_count(pass: PassIdentifier) {
+	const { count } = db.select({ count: sql<number>`count(*)` })
+		.from($queue)
+		.where(sql`pass = ${pass_hash(pass)}`)
+		.get()!
 
-if (!cmd) {
-	console.error('usage: ./kill_expiry.ts <pass ident>')
-	process.exit(1)
+	const { count: ready_count } = db.select({ count: sql<number>`count(*)` })
+		.from($queue)
+		.where(sql`pass = ${pass_hash(pass)} and expiry <= ${Date.now()}`)
+		.get()!
+
+	return `${ready_count}/${count}`
 }
 
-if (!queue_known_pass(cmd)) {
-	console.error(`unknown pass: ${cmd}`)
-	process.exit(1)
+const pass = process.argv[2]
+
+// just go print them all
+if (!pass) {
+	for (const pass of Object.keys(passes)) {
+		console.log(`${pass}:`, pass_count(pass as PassIdentifier))
+	}
+} else {
+	if (!queue_known_pass(pass)) {
+		console.error(`unknown pass: ${pass}`)
+		process.exit(1)
+	}
+
+	console.log(pass_count(pass))
 }
-
-const { count } = db.select({ count: sql<number>`count(*)` })
-	.from($queue)
-	.where(sql`pass = ${pass_hash(cmd)}`)
-	.get()!
-
-console.log(count)

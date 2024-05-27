@@ -129,7 +129,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 
 		const k = db.select({ chk: sql<number>`1` })
 			.from($queue)
-			.where(sql`expiry < ${Date.now()} and pass between ${low} and ${high}`)
+			.where(sql`expiry <= ${Date.now()} and pass between ${low} and ${high}`)
 			.get()
 
 		return !k
