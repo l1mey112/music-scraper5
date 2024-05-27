@@ -222,15 +222,18 @@ async function make_round_robin<T extends string[]>(fp: string) {
 	}
 }
 
-function make_round_robin_sqlite<T extends SQLiteTable>(table: T) {
+function make_round_robin_sqlite<T extends SQLiteTable>(table: T, window_size: number) {
 	const table_name = getTableName(table)
 
 	type Entry = InferSelectModel<T> & { rowid: number }
 
 	let i = 0
 	const stmt_select = sqlite.prepare<Entry, [i: number]>(`
-		select *, rowid from "${table_name}"
-		order by expiry asc
+		select tb.* from (
+			select *, rowid from "${table_name}"
+			order by rowid limit ${window_size}
+		) tb
+		order by tb.expiry asc
 		limit 1 offset ?
 	`)
 
@@ -272,7 +275,7 @@ async function make_random<T extends string[]>(fp: string) {
 }
 
 const spotify_api_cred = await make_random<[client_id: string, client_secret: string]>(fs_root_path('spotify_api_cred_list.json'))
-export const spotify_user_cred = make_round_robin_sqlite($cred_spotify_user)
+export const spotify_user_cred = make_round_robin_sqlite($cred_spotify_user, 32)
 
 // round robin
 export function pass_new_spotify_api(): SpotifyApi {
