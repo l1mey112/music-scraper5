@@ -99,7 +99,7 @@ export async function pass_spotify_user(): Promise<SpotifyContext> {
 	}
 
 	const client_redirect_uri = 'http://localhost:8080/callback'
-	const [client_id, client_secret] = spotify_api_cred.roll()
+	const [client_id, client_secret] = spotify_api_user_cred
 
 	async function spotify_auth_user(): Promise<AccessToken> {
 		let the_keys: AccessToken | undefined
@@ -218,7 +218,7 @@ async function make_round_robin<T extends string[]>(fp: string) {
 		},
 		unban(obj: T) {
 			ban_set.delete(obj)
-		}
+		},
 	}
 }
 
@@ -270,12 +270,15 @@ async function make_random<T extends string[]>(fp: string) {
 	return {
 		roll() {
 			return json[Math.floor(Math.random() * json.length)]
-		}
+		},
 	}
 }
 
-const spotify_api_cred = await make_random<[client_id: string, client_secret: string]>(fs_root_path('spotify_api_cred_list.json'))
+// spotify credentials that are authorised to log in the user
+// use these sparingly
+export const spotify_api_user_cred: [client_id: string, client_secret: string] = await Bun.file(fs_root_path('spotify_api_user_cred.json')).json()
 export const spotify_user_cred = make_round_robin_sqlite($cred_spotify_user, 32)
+export const spotify_api_cred = await make_round_robin<[client_id: string, client_secret: string]>(fs_root_path('spotify_api_cred_list.json'))
 
 // round robin
 export function pass_new_spotify_api(): SpotifyApi {

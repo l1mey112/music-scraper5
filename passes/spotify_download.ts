@@ -16,7 +16,7 @@ const can_download_source = sqlite.prepare<number, [string]>(`
 
 // source.download_from_spotify_track
 export function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
-	return run_with_concurrency_limit(entries, 32, async (entry) => {
+	return run_with_concurrency_limit(entries, 12, async (entry) => {
 		const spotify_id = entry.payload
 		const [_, track_id] = get_ident(spotify_id, $spotify_track, 'track_id')
 
