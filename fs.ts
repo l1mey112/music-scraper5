@@ -21,6 +21,12 @@ export const fs_media = `${fs_root}/media`
 assert_directory(fs_root, "root")
 assert_directory(fs_media, "media")
 
+// tilde expansion
+export function unwrap_path(path: string) {
+	const home = process.env.HOME
+	return home ? path.replace(/^~(?=$|\/|\\)/, home) : path
+}
+
 export function fs_root_path(path: string): string {
 	return `${fs_root}/${path}`
 }

@@ -37,7 +37,7 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 
 		const ext = mime_ext(resp.headers.get("content-type"))
 		const [file, hash] = fs_sharded_lazy_bunfile(ext)
-		
+
 		await Bun.write(file, resp)
 
 		if (!fs_hash_exists_some(hash)) {
@@ -58,7 +58,7 @@ export function pass_image_download_image_url(entries: QueueEntry<[Ident, ImageK
 			}
 
 			db.insert($image)
-				.values({ hash: hash, ident, kind: image_kind, width: size.width, height: size.height, preferred })
+				.values({ hash, ident, kind: image_kind, width: size.width, height: size.height, preferred })
 				.run()
 
 			queue_complete(entry)

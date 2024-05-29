@@ -4,7 +4,7 @@ import { assert, ident_make, run_with_concurrency_limit } from "./pass_misc"
 import { $album_track, $source, $track_artist } from "./schema"
 import { AlbumId, FSRef, Ident, ImageKind, TrackId } from "./types"
 import fs from 'fs'
-import { fs_hash_path } from "./fs"
+import { fs_hash_path, unwrap_path } from "./fs"
 
 function name_from() {
 	//const current_locale = locale_current()
@@ -179,12 +179,6 @@ function safe_path(k: string) {
 	k = k.replace(/"/g, "'")
 
 	return k
-}
-
-// tilde expansion
-function unwrap_path(path: string) {
-	const home = process.env.HOME
-	return home ? path.replace(/^~(?=$|\/|\\)/, home) : path
 }
 
 async function build_target(root_wd: string, target: BuildTarget) {
