@@ -23,7 +23,7 @@ export async function db_close() {
 		sqlite.exec("rollback")
 		console.log('db: rolled back')
 	}
-	
+
 	// only one process
 	if (await lsof_db()) {
 		sqlite.exec("pragma wal_checkpoint(TRUNCATE);") // checkpoint WAL

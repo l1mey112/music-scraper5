@@ -16,7 +16,7 @@ const can_download_source = sqlite.prepare<number, [string]>(`
 
 // source.download_from_spotify_track
 export function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
-	return run_with_concurrency_limit(entries, 32, async (entry) => {
+	return run_with_concurrency_limit(entries, 4, async (entry) => {
 		const spotify_id = entry.payload
 		const [_, track_id] = get_ident(spotify_id, $spotify_track, 'track_id')
 
@@ -51,6 +51,16 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --save-credentials False --root-path ${fs_media} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
 				.quiet()
 				.nothrow()
+
+			// python catches SIGINT for us (non-propagation) and returns 130
+			// this process has to die as intended
+
+			// if KeyboardInterrupt is left unhandled, it should reraise the signal, but python doesn't do that
+			// probably for selfish cosmetic reasons - python doesn't play nice when embedded
+			if (sh.exitCode === 130) {
+				process.kill(process.pid, "SIGINT")
+				return
+			}
 
 			// TODO: should possibly just complete the queue entry and leave the track with no source
 			if (sh.stdout.includes('SONG IS UNAVAILABLE')) {
@@ -88,15 +98,6 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 				return
 			}
 
-			// python catches SIGINT for us (non-propagation) and returns 130
-			// this process has to die as intended
-
-			// if KeyboardInterrupt is left unhandled, it should reraise the signal, but python doesn't do that
-			// probably for selfish cosmetic reasons - python doesn't play nice when embedded
-			if (sh.exitCode === 130) {
-				process.kill(process.pid, "SIGINT")
-			}
-
 			// going to retry, possibly another python error 10000000 times down the callstack
 			if (sh.exitCode !== 0 || sh.stderr.length > 0 || sh.stdout.length > 0) {
 				console.error('failed to download track', spotify_id, 'exit code', sh.exitCode)
@@ -105,7 +106,7 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 				break fail
 			}
 
-			console.log('downloaded', spotify_id)
+			console.log('downloaded', spotify_id, 'credentials', username, password)
 
 			const hash = (hash_part + '.ogg') as FSRef
 
