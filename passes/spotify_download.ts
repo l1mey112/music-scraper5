@@ -1,11 +1,12 @@
 import { $ } from "bun"
-import { fs_hash_delete, fs_hash_exists_some, fs_media, fs_sharded_path_noext_nonlazy } from "../fs"
+import { fs_hash_delete, fs_hash_exists_some, fs_media, fs_sharded_path_noext_nonlazy, unwrap_path } from "../fs"
 import { FSRef, QueueEntry } from "../types"
 import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
 import { get_ident, has_preferable_source, run_with_concurrency_limit } from "../pass_misc"
 import { queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { spotify_user_cred } from "../cred"
+import fs from 'fs'
 
 // if contains no preview, then it's not available
 const can_download_source = sqlite.prepare<number, [string]>(`
@@ -16,6 +17,21 @@ const can_download_source = sqlite.prepare<number, [string]>(`
 
 // source.download_from_spotify_track
 export function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
+	// MOST of the BadCredentials bullshit is because of existing zotify credential files
+	// why does it fail?? i don't know. just try deleting it
+
+	// 'win32': Path.home() / 'AppData/Roaming/Zotify', 
+	// 'linux': Path.home() / '.local/share/zotify', 
+	// 'darwin': Path.home() / 'Library/Application Support/Zotify' 
+	{
+		const p = unwrap_path('~/.local/share/zotify/credentials.json')
+
+		if (fs.existsSync(p)) {
+			console.log('deleting credentials.json')
+			fs.unlinkSync(p)
+		}
+	}
+
 	return run_with_concurrency_limit(entries, 4, async (entry) => {
 		const spotify_id = entry.payload
 		const [_, track_id] = get_ident(spotify_id, $spotify_track, 'track_id')

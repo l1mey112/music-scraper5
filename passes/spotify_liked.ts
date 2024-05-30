@@ -18,7 +18,7 @@ export async function pass_aux_index_spotify_liked(entries: QueueEntry<0>[]) {
 
 	const offsets = Array.from({ length: Math.ceil(total / 50) }, (_, i) => i * 50)
 
-	await run_with_concurrency_limit(offsets, 12, async offset => {
+	await run_with_concurrency_limit(offsets, 2, async offset => {
 		const tracks = await api.currentUser.tracks.savedTracks(50, offset)
 
 		for (const { track, added_at } of tracks.items) {
