@@ -12,7 +12,7 @@ try {
 	if (directive === 'ui_serve') {
 		serve_ui()
 	} else {
-		for await (const status of pass()) {
+		for await (const status of pass(true)) {
 			switch (status.kind) {
 				case 'before': {
 					let msg = `\r${status.pass}...`
@@ -32,6 +32,7 @@ try {
 					if (status.throwable) {
 						throw status.throwable
 					}
+					break
 				}
 			}
 		}

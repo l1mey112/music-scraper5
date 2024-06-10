@@ -105,7 +105,7 @@ export function queue_known_pass(pass: string): pass is PassIdentifier {
 	return pass in passes
 }
 
-export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError> {
+export async function* pass(infinite_trip?: boolean): AsyncGenerator<PassBefore | PassAfter | PassError> {
 	let changed
 	let trip_count = 0
 
@@ -200,7 +200,7 @@ export async function* pass(): AsyncGenerator<PassBefore | PassAfter | PassError
 		}
 
 		trip_count++
-		if (trip_count > TRIP_COUNT_MAX) {
+		if (!infinite_trip && trip_count > TRIP_COUNT_MAX) {
 			yield {
 				kind: 'error',
 				error: 'trip count exceeded',

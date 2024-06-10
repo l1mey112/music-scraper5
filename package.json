@@ -4,6 +4,7 @@
   "type": "module",
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/protobufjs": "^6.0.0",
     "drizzle-kit": "^0.20.14"
   },
   "peerDependencies": {
@@ -17,6 +18,7 @@
     "bcp-47": "^2.1.0",
     "image-size": "^1.1.1",
     "open": "^10.1.0",
+    "protobufjs": "^7.3.0",
     "tldts": "^6.1.18",
     "ulid": "^2.3.0",
     "yt-dlp-wrap": "^2.3.12"

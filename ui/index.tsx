@@ -29,6 +29,7 @@ export function Index() {
 						</select>
 					</form>
 				</div>
+				<div id="select-results"></div>
 				<hr />
 				<div id="search-results" class="flex-container"></div>
 			</div>
@@ -51,6 +52,7 @@ export function Index() {
 						</select>
 					</form>
 				</div>
+				<div id="select-results"></div>
 				<hr />
 				<div id="search-results" class="flex-container"></div>
 			</div>

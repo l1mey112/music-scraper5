@@ -87,7 +87,7 @@ type PassDesc = {
 }
 
 export const passes_settled: Record<PassIdentifierTemplate, PassSettledDesc> = {
-	'track.merge_using_known_heuristics': { pass: pass_track_merge_using_known_heuristics },
+	//'track.merge_using_known_heuristics': { pass: pass_track_merge_using_known_heuristics },
 	//'link.classify_weak': { pass: pass_link_classify_weak },
 	//'link.classify.link_shorteners': { pass: pass_link_classify_link_shorteners },
 }

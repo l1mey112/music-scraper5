@@ -7,6 +7,7 @@ import { nfetch } from "./fetch"
 import { atexit } from "./atexit"
 import { fs_root_path } from "./fs"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
+import { spotify_generate } from "./spotify/gen"
 
 export type PersistentCredentialKind = keyof PersistentCredentialStore
 type PersistentCredentialStore = {
@@ -237,6 +238,10 @@ function make_round_robin_sqlite<T extends SQLiteTable>(table: T, window_size: n
 		limit 1 offset ?
 	`)
 
+	const stmt_count = sqlite.prepare<{ count: number }, []>(`
+		select count(*) as count from "${table_name}"
+	`)
+
 	const stmt_delete = sqlite.prepare<[], [rowid: number]>(`
 		delete from "${table_name}" where rowid = ?
 	`)
@@ -245,13 +250,25 @@ function make_round_robin_sqlite<T extends SQLiteTable>(table: T, window_size: n
 		update "${table_name}" set expiry = ? where rowid = ?
 	`)
 
+	const stmt_insert = sqlite.prepare<[], [username: string, password: string]>(`
+		insert into "${table_name}" (username, password) values (?, ?)
+	`)
+
 	return {
-		roll(): Entry {
+		async ensure() {
+			while (stmt_count.get()!.count < window_size) {
+				// generate more
+				const [username, password] = await spotify_generate()
+				console.log(`${table_name}.ensure(${table_name}): generated ${username}`)
+				stmt_insert.run(username, password)
+			}
+		},
+		roll(): Entry | null {
 			const item = stmt_select.get(i++)
 
 			if (!item) {
 				i = 0
-				return stmt_select.get(i++)! // let them deal with the null exception
+				return stmt_select.get(i++) // let them deal with the null exception
 			}
 
 			return item
@@ -277,7 +294,7 @@ async function make_random<T extends string[]>(fp: string) {
 // spotify credentials that are authorised to log in the user
 // use these sparingly
 export const spotify_api_user_cred: [client_id: string, client_secret: string] = await Bun.file(fs_root_path('spotify_api_user_cred.json')).json()
-export const spotify_user_cred = make_round_robin_sqlite($cred_spotify_user, 32)
+export const spotify_user_cred = make_round_robin_sqlite($cred_spotify_user, 8)
 export const spotify_api_cred = await make_round_robin<[client_id: string, client_secret: string]>(fs_root_path('spotify_api_cred_list.json'))
 
 // round robin

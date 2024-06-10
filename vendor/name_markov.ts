@@ -22,6 +22,9 @@ export default function markov(): string {
 			last_good++
 		}
 
+		if (last_good >= choices.length) {
+			last_good = choices.length - 1
+		}
 		return choices[last_good][0]
 	}
 

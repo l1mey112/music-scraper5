@@ -678,6 +678,12 @@ export async function run_batched_zip<T, O>(arr: T[], batch_size: number, batch_
 	}
 }
 
+export class StopIteration extends Error {
+	constructor() {
+		super()
+	}
+}
+
 export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrency_limit: number, next: (v: T) => Promise<void>) {
 	const active_promises: Promise<void>[] = []
 	let has_error = false
@@ -690,6 +696,9 @@ export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrenc
 
 		const next_operation = next(item).catch(err => {
 			has_error = true
+			if (err instanceof StopIteration) {
+				return
+			}
 			throw err
 		})
 		active_promises.push(next_operation)
@@ -708,6 +717,18 @@ export async function run_with_concurrency_limit<T>(arr: Iterable<T>, concurrenc
 
 	// wait for all active operations to complete
 	await Promise.all(active_promises)
+}
+
+// racing promises
+export function timeout_promise<T>(promise: Promise<T>, timeout: number): Promise<T | undefined> {
+	return Promise.race([
+		promise,
+		new Promise<T | undefined>(resolve => {
+			setTimeout(() => {
+				resolve(undefined)
+			}, timeout)
+		})
+	])
 }
 
 // functions equivalently to run_with_concurrency_limit, but with a fail limit

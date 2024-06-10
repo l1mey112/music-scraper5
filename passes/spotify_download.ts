@@ -3,7 +3,7 @@ import { fs_hash_delete, fs_hash_exists_some, fs_media, fs_sharded_path_noext_no
 import { FSRef, QueueEntry } from "../types"
 import { $source, $spotify_track } from "../schema"
 import { db, sqlite } from "../db"
-import { get_ident, has_preferable_source, run_with_concurrency_limit } from "../pass_misc"
+import { StopIteration, get_ident, has_preferable_source, run_with_concurrency_limit, timeout_promise } from "../pass_misc"
 import { queue_complete, queue_dispatch_immediate, queue_retry_failed } from "../pass"
 import { spotify_user_cred } from "../cred"
 import fs from 'fs'
@@ -16,7 +16,7 @@ const can_download_source = sqlite.prepare<number, [string]>(`
 `)
 
 // source.download_from_spotify_track
-export function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
+export async function pass_source_download_from_spotify_track(entries: QueueEntry<string>[]) {
 	// MOST of the BadCredentials bullshit is because of existing zotify credential files
 	// why does it fail?? i don't know. just try deleting it
 
@@ -32,7 +32,9 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 		}
 	}
 
-	return run_with_concurrency_limit(entries, 4, async (entry) => {
+	await spotify_user_cred.ensure() // generate more accounts
+
+	return run_with_concurrency_limit(entries, 8, async (entry) => {
 		const spotify_id = entry.payload
 		const [_, track_id] = get_ident(spotify_id, $spotify_track, 'track_id')
 
@@ -57,6 +59,9 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 		const file = path.slice(fs_media.length + 1)
 
 		const cred = spotify_user_cred.roll()
+		if (!cred) {
+			throw new StopIteration()
+		}
 		const { username, password } = cred
 
 		// INFO: you know, from what i can tell, it isn't spotify throttling us. they're absolutely oblivious.
@@ -64,9 +69,16 @@ export function pass_source_download_from_spotify_track(entries: QueueEntry<stri
 
 		fail: {
 			// 160kbps (highest for free users)
-			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --save-credentials False --root-path ${fs_media} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
+			const sh_promise = $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --save-credentials False --root-path ${fs_media} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + spotify_id}`
 				.quiet()
 				.nothrow()
+
+			const sh = await timeout_promise(sh_promise, 16_000)
+
+			if (!sh) {
+				console.error('timeout for', spotify_id)
+				return
+			}
 
 			// python catches SIGINT for us (non-propagation) and returns 130
 			// this process has to die as intended

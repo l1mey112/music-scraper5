@@ -44,7 +44,7 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 		let output_s
 		try {
 			output_s = await ytdl.execPromise(args)
-			console.log(`downloaded ${youtube_id}`)
+			console.log(`downloaded ${youtube_id}`, JSON.parse(output_s))
 		} catch (e) {
 			no_log: {
 				if (e instanceof Error) {
@@ -56,6 +56,18 @@ export function pass_source_download_from_youtube_video(entries: QueueEntry<stri
 						return
 					} else if (e.message.includes('Video unavailable')) {
 						queue_retry_failed(entry, 'Video unavailable')
+						return
+					} else if (e.message.includes('Private video')) {
+						queue_retry_failed(entry, 'Private video')
+						return
+					} else if (e.message.includes('Interrupted by user') || e.message.includes('KeyboardInterrupt')) {
+						process.kill(process.pid, "SIGINT")
+						return
+					} else if (e.message.includes('Offline')) {
+						queue_retry_failed(entry, 'Private video') // repeated
+						return
+					} else if (e.message.includes('HTTP Error 403: Forbidden')) {
+						console.error('youtube-dl forbidden')
 						return
 					}
 				}
